@@ -77,3 +77,22 @@ export const CardsIcon = ({ size }: { size?: number }) => (
     <path d="M3 7v10M21 7v10" />
   </Svg>
 );
+
+export const CheckIcon = ({ size }: { size?: number }) => (
+  <Svg size={size}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </Svg>
+);
+
+export const ChevronIcon = ({ size }: { size?: number }) => (
+  <Svg size={size}>
+    <path d="M9 5l7 7-7 7" />
+  </Svg>
+);
+
+export const SpeakerIcon = ({ size }: { size?: number }) => (
+  <Svg size={size}>
+    <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" />
+    <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" />
+  </Svg>
+);

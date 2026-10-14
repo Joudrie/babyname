@@ -8,7 +8,7 @@ const PAGE = 100;
 export function ListView({ queue, onDecide, onOpenName }: { queue: string[]; onDecide(name: string, keep: boolean): void; onOpenName(name: string): void }) {
   const [shown, setShown] = useState(PAGE);
   if (!queue.length) {
-    return <p className="empty-note">You've sorted every name in these decks. Tap 🌍 to open more.</p>;
+    return <p className="empty-note">You've sorted every name in these decks. Tap Names at the top to open more.</p>;
   }
   return (
     <div className="list-view">

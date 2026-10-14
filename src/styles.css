@@ -754,9 +754,6 @@ button {
   }
 }
 
-.tutorial-emoji {
-  font-size: 40px;
-}
 .tutorial-card h2 {
   font-family: var(--font-name);
   font-weight: 600;
@@ -1041,48 +1038,6 @@ button {
 
 /* ---------- Box ---------- */
 
-.box-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-  margin: 0 -20px;
-  padding-left: 20px;
-  padding-right: 20px;
-  scrollbar-width: none;
-}
-.box-tab {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #f1f4f2;
-  font-weight: 800;
-  font-size: 14px;
-}
-.box-tab.is-on {
-  background: var(--ink);
-  color: #fff;
-}
-.box-tab-count {
-  font-size: 12px;
-  opacity: 0.6;
-}
-.box-tab--add {
-  color: var(--keep);
-  background: none;
-  border: 2px dashed var(--line);
-}
-.box-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  color: var(--muted);
-  margin: 10px 0 14px;
-}
 .nudge {
   border-radius: 18px;
   padding: 14px 16px;
@@ -1167,12 +1122,6 @@ button {
   --card-bg: var(--plain);
   --card-ink: var(--plain-ink);
 }
-.box-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 8px;
-}
 
 /* ---------- Name sheet ---------- */
 
@@ -1223,12 +1172,12 @@ button {
   gap: 6px;
 }
 .variant {
-  padding: 6px 12px;
-  border-radius: 12px;
+  padding: 4px 10px;
+  border-radius: 10px;
   background: var(--card-bg);
   color: var(--card-ink);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
 }
 .variant:disabled {
   opacity: 0.6;
@@ -1250,14 +1199,11 @@ button {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 10px 6px;
+  padding: 12px 6px;
   border-radius: 14px;
   border: 2px solid var(--line);
   font-weight: 800;
   font-size: 13px;
-}
-.tier-btn span {
-  font-size: 22px;
 }
 .tier-btn.is-on {
   border-color: var(--keep);
@@ -1515,4 +1461,197 @@ button {
 }
 .deck-chip-count {
   font-size: 11px;
+}
+
+/* ---------- Boxes ---------- */
+
+.row-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.row-list--spaced {
+  margin-top: 24px;
+}
+.row-list li {
+  border-bottom: 1px solid var(--line);
+}
+.row-link {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 2px;
+  text-align: left;
+  color: var(--muted);
+}
+.row-link-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.row-link-main strong {
+  color: var(--ink);
+  font-size: 17px;
+}
+.row-link-main span {
+  font-size: 13px;
+}
+
+.box-page {
+  position: relative;
+}
+.box-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.box-count {
+  font-weight: 800;
+  color: var(--muted);
+  font-size: 14px;
+}
+.segmented--sm {
+  padding: 3px;
+  border-radius: 10px;
+}
+.segmented--sm button {
+  flex: none;
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+}
+.box-note {
+  font-size: 13px;
+  color: var(--muted);
+  background: #f6f8f6;
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+/* Built for long lists: ~15 names per phone screen. */
+.kept-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+}
+.kept-row {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  border-bottom: 1px solid var(--line);
+  content-visibility: auto;
+  contain-intrinsic-size: auto 46px;
+}
+.kept-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 4px;
+  text-align: left;
+}
+.kept-main strong {
+  font-size: 17px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rank-tag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f1f4f2;
+  color: var(--muted);
+}
+.rank-tag--1 {
+  background: var(--keep-soft);
+  color: var(--keep);
+}
+.kept-remove {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.kept-remove:active {
+  color: var(--nope);
+}
+.box-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 18px;
+}
+.box-footer .inline-link {
+  padding: 4px 0;
+  font-size: 14px;
+}
+.box-footer .inline-link:disabled {
+  opacity: 0.5;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(20px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(calc(100% - 32px), 440px);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 12px 18px;
+  border-radius: 16px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 30px rgba(30, 40, 35, 0.25);
+  animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  z-index: 40;
+}
+.toast button {
+  color: #9fe0b4;
+  font-weight: 800;
+  padding: 6px 10px;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+}
+
+.tutorial-mark {
+  display: block;
+}
+.tutorial-mark--icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--keep-soft);
+  color: var(--keep);
+  display: grid;
+  place-items: center;
+}
+.loading-mark {
+  display: block;
+  margin: 0 auto 8px;
+}
+.speak-btn {
+  display: grid;
+  place-items: center;
+  color: inherit;
 }

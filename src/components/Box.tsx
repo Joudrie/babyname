@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ORIGIN_META, getCatalog, genderOf } from '../data/catalog';
 import {
   addBox,
@@ -9,37 +9,78 @@ import {
   moveToBox,
   removeFromBox,
   renameBox,
+  restoreToBox,
   setActiveBox,
   setDecision,
   setPartner,
   setTier,
   updateSettings,
+  type BoxEntry,
   type State,
   type Tier,
 } from '../store';
 import { boxImage, shareImage } from '../exportImage';
 import { myPicks, shareLink, shareOrCopy } from '../share';
 import { NameDetail } from './NameInfo';
+import { ChevronIcon, XIcon } from './icons';
 
-export const TIERS: { tier: Tier; label: string; emoji: string }[] = [
-  { tier: 1, label: 'Love it', emoji: '💖' },
-  { tier: 2, label: 'Really like', emoji: '👍' },
-  { tier: 3, label: 'Thinking', emoji: '🤔' },
+/** Optional ranking, set from a name's details. Shown as a small tag in the list. */
+export const TIERS: { tier: Tier; label: string }[] = [
+  { tier: 1, label: 'Love it' },
+  { tier: 2, label: 'Really like' },
+  { tier: 3, label: 'Maybe' },
 ];
-const TIER_EMOJI: Record<Tier, string> = { 0: '', 1: '💖', 2: '👍', 3: '🤔' };
+const TIER_LABEL: Record<Tier, string> = { 0: '', 1: 'Love it', 2: 'Really like', 3: 'Maybe' };
 
-function NameChip({ name, tier, onOpen, extra }: { name: string; tier?: Tier; onOpen(name: string): void; extra?: string }) {
+const count = (n: number) => `${n} name${n === 1 ? '' : 's'}`;
+
+/** The folder button opens this: every box as a row. Tap one to see what's inside. */
+export function BoxesPage({ state, onOpenBox, onCompare }: { state: State; onOpenBox(id: string): void; onCompare(): void }) {
   return (
-    <button className={`name-chip name-chip--${genderOf(name)}`} onClick={() => onOpen(name)}>
-      {tier ? <span className="name-chip-tier">{TIER_EMOJI[tier]}</span> : null}
-      {name}
-      {extra && <span className="name-chip-extra">{extra}</span>}
-    </button>
+    <div className="boxes">
+      <ul className="row-list">
+        {state.boxes.map((b) => (
+          <li key={b.id}>
+            <button className="row-link" onClick={() => onOpenBox(b.id)}>
+              <span className="row-link-main">
+                <strong>{b.name}</strong>
+                <span>
+                  {count(Object.keys(state.entries[b.id] ?? {}).length)}
+                  {b.id === state.activeBox && state.boxes.length > 1 ? ' · new keepers go here' : ''}
+                </span>
+              </span>
+              <ChevronIcon size={18} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      <button
+        className="text-btn"
+        onClick={() => {
+          const name = prompt('Name your new box', `Box ${state.boxes.length + 1}`)?.trim();
+          if (name) onOpenBox(addBox(name.slice(0, 30)));
+        }}
+      >
+        + New box
+      </button>
+
+      <ul className="row-list row-list--spaced">
+        <li>
+          <button className="row-link" onClick={onCompare}>
+            <span className="row-link-main">
+              <strong>Compare with your partner</strong>
+              <span>{state.partner ? `${state.partner.name || 'Partner'}'s list is saved` : 'See the names you both like'}</span>
+            </span>
+            <ChevronIcon size={18} />
+          </button>
+        </li>
+      </ul>
+    </div>
   );
 }
 
 /** "Most of your names are Irish, want the Irish deck?" — only when one origin clearly dominates. */
-function useNudge(state: State, names: string[]) {
+function useNudge(state: State, box: string, names: string[]) {
   return useMemo(() => {
     const c = getCatalog();
     const counts = new Map<string, number>();
@@ -51,86 +92,98 @@ function useNudge(state: State, names: string[]) {
       known++;
       counts.set(o, (counts.get(o) ?? 0) + 1);
     }
-    for (const [origin, n] of [...counts].sort((a, b) => b[1] - a[1])) {
-      const key = `${state.activeBox}:${origin}`;
-      const deck = `origin:${origin}`;
-      if (n >= 5 && n / known >= 0.6 && ORIGIN_META[origin] && !state.settings.decks.includes(deck) && !state.dismissedNudges.includes(key)) {
-        return { key, deck, label: ORIGIN_META[origin].label, pct: Math.round((n / known) * 100) };
-      }
-      break;
+    const top = [...counts].sort((a, b) => b[1] - a[1])[0];
+    if (!top) return null;
+    const [origin, n] = top;
+    const key = `${box}:${origin}`;
+    const deck = `origin:${origin}`;
+    if (n >= 5 && n / known >= 0.6 && ORIGIN_META[origin] && !state.settings.decks.includes(deck) && !state.dismissedNudges.includes(key)) {
+      return { key, deck, label: ORIGIN_META[origin].label, pct: Math.round((n / known) * 100) };
     }
     return null;
-  }, [state.activeBox, state.settings.decks, state.dismissedNudges, names]);
+  }, [box, state.settings.decks, state.dismissedNudges, names]);
 }
 
-export function BoxPanel({ state, onOpenName, onCompare }: { state: State; onOpenName(name: string): void; onCompare(): void }) {
-  const box = state.boxes.find((b) => b.id === state.activeBox) ?? state.boxes[0];
-  const entries = state.entries[box.id] ?? {};
-  const names = useMemo(() => Object.entries(entries).sort((a, b) => b[1].t - a[1].t), [entries]);
+type Sort = 'newest' | 'az';
+
+/** One box: a compact list built for a hundred names, with one-tap remove and undo. */
+export function BoxPage({ state, boxId, onOpenName, onGone }: { state: State; boxId: string; onOpenName(name: string): void; onGone(): void }) {
+  const box = state.boxes.find((b) => b.id === boxId);
+  const entries = state.entries[boxId] ?? {};
+  const [sort, setSort] = useState<Sort>('newest');
+  const [removed, setRemoved] = useState<{ name: string; entry: BoxEntry } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const timer = useRef<number>(undefined);
+
+  const names = useMemo(() => {
+    const list = Object.entries(entries);
+    if (sort === 'az') list.sort((a, b) => a[0].localeCompare(b[0]));
+    else list.sort((a, b) => b[1].t - a[1].t);
+    return list;
+  }, [entries, sort]);
   const nudge = useNudge(
     state,
+    boxId,
     useMemo(() => names.map(([n]) => n), [names]),
   );
-  const [busy, setBusy] = useState(false);
+
+  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(() => {
+    if (!box) onGone();
+  }, [box, onGone]);
+  if (!box) return null;
+
+  function remove(name: string, entry: BoxEntry) {
+    removeFromBox(boxId, name);
+    setRemoved({ name, entry });
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setRemoved(null), 6000);
+  }
+
+  function undoRemove() {
+    if (!removed) return;
+    restoreToBox(boxId, removed.name, removed.entry);
+    setRemoved(null);
+    clearTimeout(timer.current);
+  }
 
   async function saveImage() {
     setBusy(true);
     try {
-      const blob = await boxImage(box.name, names.map(([n, e]) => [n, e.tier]), state.settings.theme === 'neutral');
-      await shareImage(blob, `${box.name.replace(/[^\w -]/g, '') || 'names'}.png`);
+      const blob = await boxImage(box!.name, names.map(([n, e]) => [n, e.tier]), state.settings.theme === 'neutral');
+      await shareImage(blob, `${box!.name.replace(/[^\w -]/g, '') || 'names'}.png`);
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <div className="box">
-      <div className="box-tabs" role="tablist">
-        {state.boxes.map((b) => (
-          <button key={b.id} role="tab" aria-selected={b.id === box.id} className={`box-tab ${b.id === box.id ? 'is-on' : ''}`} onClick={() => setActiveBox(b.id)}>
-            {b.name}
-            <span className="box-tab-count">{Object.keys(state.entries[b.id] ?? {}).length}</span>
+    <div className="box-page">
+      <div className="box-toolbar">
+        <span className="box-count">{count(names.length)}</span>
+        <div className="segmented segmented--sm">
+          <button className={sort === 'newest' ? 'is-on' : ''} onClick={() => setSort('newest')}>
+            Newest
           </button>
-        ))}
-        <button
-          className="box-tab box-tab--add"
-          onClick={() => {
-            const name = prompt('Name your new box', `Box ${state.boxes.length + 1}`)?.trim();
-            if (name) addBox(name.slice(0, 30));
-          }}
-        >
-          + New box
-        </button>
-      </div>
-      <div className="box-meta">
-        <span>New keepers go into this box.</span>
-        <span className="box-meta-actions">
-          <button
-            className="inline-link"
-            onClick={() => {
-              const name = prompt('Rename this box', box.name)?.trim();
-              if (name) renameBox(box.id, name.slice(0, 30));
-            }}
-          >
-            Rename
+          <button className={sort === 'az' ? 'is-on' : ''} onClick={() => setSort('az')}>
+            A–Z
           </button>
-          {state.boxes.length > 1 && (
-            <button
-              className="inline-link inline-link--danger"
-              onClick={() => {
-                if (confirm(`Delete "${box.name}"? Names that are only in this box go back into your deck.`)) deleteBox(box.id);
-              }}
-            >
-              Delete
-            </button>
-          )}
-        </span>
+        </div>
       </div>
+
+      {boxId !== state.activeBox && (
+        <div className="box-note">
+          New keepers go into {state.boxes.find((b) => b.id === state.activeBox)?.name}.
+          <button className="inline-link" onClick={() => setActiveBox(boxId)}>
+            Use this box instead
+          </button>
+        </div>
+      )}
 
       {nudge && (
         <div className="nudge">
           <p>
-            <b>{nudge.pct}% of your names here are {nudge.label}.</b> Want more like them?
+            <b>{nudge.pct}% of these names are {nudge.label}.</b> Want more like them?
           </p>
           <div className="nudge-actions">
             <button
@@ -140,7 +193,7 @@ export function BoxPanel({ state, onOpenName, onCompare }: { state: State; onOpe
                 dismissNudge(nudge.key);
               }}
             >
-              Turn on {nudge.label}
+              Add {nudge.label} names
             </button>
             <button className="inline-link" onClick={() => dismissNudge(nudge.key)}>
               No thanks
@@ -150,37 +203,55 @@ export function BoxPanel({ state, onOpenName, onCompare }: { state: State; onOpe
       )}
 
       {names.length === 0 ? (
-        <p className="empty-note">Nothing here yet. Swipe right on a name you love and it lands in this box.</p>
+        <p className="empty-note">Nothing here yet. Swipe right on a name you love and it lands here.</p>
       ) : (
-        <>
-          <p className="panel-note">Tap a name to rank it. A top 50 is a good place to start narrowing down.</p>
-          {[...TIERS, { tier: 0 as Tier, label: 'Not ranked yet', emoji: '' }].map(({ tier, label, emoji }) => {
-            const list = names.filter(([, e]) => e.tier === tier);
-            if (!list.length) return null;
-            return (
-              <section key={tier} className={`tier tier--${tier}`}>
-                <h3>
-                  {emoji} {label} <span className="tier-count">{list.length}</span>
-                </h3>
-                <div className="chip-wrap">
-                  {list.map(([n]) => (
-                    <NameChip key={n} name={n} onOpen={onOpenName} />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </>
+        <ul className="kept-list">
+          {names.map(([name, e]) => (
+            <li key={name} className="kept-row">
+              <button className="kept-main" onClick={() => onOpenName(name)}>
+                <span className={`dot dot--${genderOf(name)}`} />
+                <strong>{name}</strong>
+                {e.tier > 0 && <span className={`rank-tag rank-tag--${e.tier}`}>{TIER_LABEL[e.tier]}</span>}
+              </button>
+              <button className="kept-remove" onClick={() => remove(name, e)} aria-label={`Remove ${name}`}>
+                <XIcon size={16} />
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
 
-      <div className="box-actions">
-        <button className="soft-btn" onClick={onCompare}>
-          💞 Compare with partner
+      <div className="box-footer">
+        <button
+          className="inline-link"
+          onClick={() => {
+            const name = prompt('Rename this box', box.name)?.trim();
+            if (name) renameBox(boxId, name.slice(0, 30));
+          }}
+        >
+          Rename
         </button>
-        <button className="soft-btn" onClick={saveImage} disabled={busy || names.length === 0}>
-          {busy ? 'Making picture…' : '🖼️ Save as picture'}
+        <button className="inline-link" onClick={saveImage} disabled={busy || names.length === 0}>
+          {busy ? 'Making picture…' : 'Save as picture'}
         </button>
+        {state.boxes.length > 1 && (
+          <button
+            className="inline-link inline-link--danger"
+            onClick={() => {
+              if (confirm(`Delete "${box.name}"? Names that are only in this box go back into your deck.`)) deleteBox(boxId);
+            }}
+          >
+            Delete box
+          </button>
+        )}
       </div>
+
+      {removed && (
+        <div className="toast" role="status">
+          <span>Removed {removed.name}</span>
+          <button onClick={undoRemove}>Undo</button>
+        </div>
+      )}
     </div>
   );
 }
@@ -198,11 +269,10 @@ export function NameActions({ state, name, onPick }: { state: State; name: strin
 
       {entry && box ? (
         <>
-          <h3 className="detail-h">How much do you like it?</h3>
+          <h3 className="detail-h">Rank it (optional)</h3>
           <div className="tier-picker">
-            {TIERS.map(({ tier, label, emoji }) => (
+            {TIERS.map(({ tier, label }) => (
               <button key={tier} className={`tier-btn ${entry.tier === tier ? 'is-on' : ''}`} onClick={() => setTier(box, name, entry.tier === tier ? 0 : tier)}>
-                <span>{emoji}</span>
                 {label}
               </button>
             ))}
@@ -219,21 +289,34 @@ export function NameActions({ state, name, onPick }: { state: State; name: strin
               </select>
             </label>
           )}
-          <button className="text-btn text-btn--danger" onClick={() => removeFromBox(box, name)}>
-            Take it out of the box
-          </button>
         </>
       ) : (
         <div className="decide-row">
           <button className={`decide-btn decide-btn--no ${decision === 'no' ? 'is-on' : ''}`} onClick={() => setDecision(name, 'no')}>
-            ✕ Pass
+            Pass
           </button>
           <button className="decide-btn decide-btn--yes" onClick={() => addToBox(name)}>
-            ♥ Keep it
+            Keep it
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+function NameRows({ names, onOpen, note }: { names: string[]; onOpen(name: string): void; note?: (name: string) => string }) {
+  return (
+    <ul className="kept-list">
+      {names.map((n) => (
+        <li key={n} className="kept-row">
+          <button className="kept-main" onClick={() => onOpen(n)}>
+            <span className={`dot dot--${genderOf(n)}`} />
+            <strong>{n}</strong>
+            {note?.(n) && <span className="rank-tag">{note(n)}</span>}
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -275,17 +358,9 @@ export function ComparePanel({ state, onOpenName, onSwipePartner }: { state: Sta
         <>
           <section className="tier">
             <h3>
-              💞 You both like <span className="tier-count">{both.length}</span>
+              You both like <span className="tier-count">{both.length}</span>
             </h3>
-            {both.length ? (
-              <div className="chip-wrap">
-                {both.map((n) => (
-                  <NameChip key={n} name={n} onOpen={onOpenName} extra={`${TIER_EMOJI[mine.get(n) ?? 0]}${TIER_EMOJI[theirs.get(n) ?? 0]}`} />
-                ))}
-              </div>
-            ) : (
-              <p className="empty-note">No matches yet. Keep swiping!</p>
-            )}
+            {both.length ? <NameRows names={both} onOpen={onOpenName} /> : <p className="empty-note">No matches yet. Keep swiping!</p>}
           </section>
           <section className="tier">
             <h3>
@@ -296,21 +371,13 @@ export function ComparePanel({ state, onOpenName, onSwipePartner }: { state: Sta
                 Swipe on {them}'s {unswiped} new name{unswiped === 1 ? '' : 's'}
               </button>
             )}
-            <div className="chip-wrap">
-              {onlyThem.map((n) => (
-                <NameChip key={n} name={n} tier={theirs.get(n)} onOpen={onOpenName} />
-              ))}
-            </div>
+            <NameRows names={onlyThem} onOpen={onOpenName} note={(n) => TIER_LABEL[theirs.get(n) ?? 0]} />
           </section>
           <section className="tier">
             <h3>
               Only you like <span className="tier-count">{onlyMe.length}</span>
             </h3>
-            <div className="chip-wrap">
-              {onlyMe.map((n) => (
-                <NameChip key={n} name={n} tier={mine.get(n)} onOpen={onOpenName} />
-              ))}
-            </div>
+            <NameRows names={onlyMe} onOpen={onOpenName} note={(n) => TIER_LABEL[mine.get(n) ?? 0]} />
           </section>
           <button
             className="text-btn text-btn--danger"

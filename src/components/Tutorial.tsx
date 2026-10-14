@@ -11,7 +11,7 @@ export function Tutorial({ onDone }: { onDone(): void }) {
       <div className="tutorial-card" key={step}>
         {step === 0 ? (
           <>
-            <div className="tutorial-emoji">🍼</div>
+            <img className="tutorial-mark" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={52} height={52} />
             <h2>Welcome to {APP_NAME}</h2>
             <p>There are a lot of names out there. Let's find yours, one card at a time.</p>
             <ul className="gesture-list">
@@ -38,14 +38,16 @@ export function Tutorial({ onDone }: { onDone(): void }) {
           </>
         ) : (
           <>
-            <div className="tutorial-emoji">📦</div>
-            <h2>Your keepers &amp; your decks</h2>
+            <span className="tutorial-mark tutorial-mark--icon">
+              <BoxIcon size={30} />
+            </span>
+            <h2>Where your names go</h2>
             <ul className="gesture-list">
               <li>
                 <span className="gesture">
                   <BoxIcon size={18} />
                 </span>
-                <span>Tap the box in the corner to see your names</span>
+                <span>Tap the folder in the corner to see the names you kept</span>
               </li>
               <li>
                 <span className="gesture">
@@ -58,7 +60,7 @@ export function Tutorial({ onDone }: { onDone(): void }) {
                   <GlobeIcon size={18} />
                 </span>
                 <span>
-                  We start you on American &amp; Western European names. Tap the globe anytime for other countries, eras,
+                  We start you on American &amp; Western European names. Tap Names at the top anytime for other countries, eras,
                   fiction, or names starting with a letter
                 </span>
               </li>

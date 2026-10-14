@@ -79,7 +79,7 @@ export function SettingsPanel({ state, onReplayTutorial }: { state: State; onRep
 
       <p className="panel-note">
         {state.saveFailed
-          ? "⚠️ Your browser is blocking storage, so swipes aren't being saved. Try a normal (non-private) window."
+          ? "Your browser is blocking storage, so swipes aren't being saved. Try a normal (non-private) window."
           : 'Your progress saves on this device automatically. We never send promotional email.'}
       </p>
       <p className="panel-note small">

@@ -100,11 +100,11 @@ interface RawCore {
 
 /** Recent most-given names from each country's official statistics. */
 const COUNTRIES: Record<string, { label: string; hint: string }> = {
-  uk: { label: '🇬🇧 England & Wales', hint: 'ONS, 2016–2025' },
-  ie: { label: '🇮🇪 Ireland', hint: 'CSO, 2015–2024' },
-  fr: { label: '🇫🇷 France', hint: 'INSEE, 2012–2021' },
-  es: { label: '🇪🇸 Spain', hint: 'INE, top names by decade' },
-  no: { label: '🇳🇴 Norway', hint: 'SSB, 2015–2024' },
+  uk: { label: 'England & Wales', hint: 'ONS, 2016–2025' },
+  ie: { label: 'Ireland', hint: 'CSO, 2015–2024' },
+  fr: { label: 'France', hint: 'INSEE, 2012–2021' },
+  es: { label: 'Spain', hint: 'INE, top names by decade' },
+  no: { label: 'Norway', hint: 'SSB, 2015–2024' },
 };
 
 const BASE = `${import.meta.env.BASE_URL}data/`;

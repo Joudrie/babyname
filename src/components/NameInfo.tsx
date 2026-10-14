@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SpeakerIcon } from './icons';
 import { getCatalog, getDetails, getFictionSource, genderOf, originLabels, type Details } from '../data/catalog';
 
 export function useNameInfo(name: string) {
@@ -29,7 +30,7 @@ export function SpeakButton({ name }: { name: string }) {
   if (!canSpeak) return null;
   return (
     <button className="speak-btn" onClick={() => speak(name)} aria-label={`Hear ${name}`}>
-      🔊
+      <SpeakerIcon size={20} />
     </button>
   );
 }
@@ -77,7 +78,7 @@ export function CardBack({ name }: { name: string }) {
       </div>
       {d?.pron && <div className="back-pron">{d.pron}</div>}
       {d?.meaning && <p className="back-meaning">{d.meaning}</p>}
-      {info?.fiction && <p className="back-fiction">📖 From {info.fiction}</p>}
+      {info?.fiction && <p className="back-fiction">From {info.fiction}</p>}
       {origins.length > 0 && (
         <div className="tag-row">
           {origins.slice(0, 4).map((o) => (
@@ -116,7 +117,7 @@ export function NameDetail({ name, onPickVariant }: { name: string; onPickVarian
         {d?.pron ? ` · ${d.pron}` : ''}
       </div>
       {d?.meaning && <p className="detail-meaning">{d.meaning}</p>}
-      {info?.fiction && <p className="back-fiction">📖 From {info.fiction}</p>}
+      {info?.fiction && <p className="back-fiction">From {info.fiction}</p>}
       {origins.length > 0 && (
         <div className="tag-row">
           {origins.map((o) => (

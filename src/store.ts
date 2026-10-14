@@ -76,7 +76,7 @@ export const DEFAULT_DECKS = [
 const DEFAULTS: State = {
   decisions: {},
   history: [],
-  boxes: [{ id: 'b1', name: 'My names' }],
+  boxes: [{ id: 'b1', name: 'Box 1' }],
   activeBox: 'b1',
   entries: { b1: {} },
   partner: null,
@@ -111,6 +111,8 @@ function load(): State {
       s.entries = { b1: Object.fromEntries(Object.entries(s.decisions).filter(([, d]) => d === 'yes').map(([n]) => [n, { tier: 0 as Tier, t }])) };
     }
     if (!s.boxes.some((b) => b.id === s.activeBox)) s.activeBox = s.boxes[0].id;
+    // The first box used to be called "My names"; it's "Box 1" now unless someone renamed it.
+    s.boxes = s.boxes.map((b) => (b.id === 'b1' && b.name === 'My names' ? { ...b, name: 'Box 1' } : b));
     return s;
   } catch {
     return DEFAULTS;
@@ -240,6 +242,14 @@ export function removeFromBox(box: string, name: string) {
   });
 }
 
+/** Puts a just-removed name back exactly as it was (the "Undo" after removing). */
+export function restoreToBox(box: string, name: string, entry: BoxEntry) {
+  update((s) => ({
+    decisions: { ...s.decisions, [name]: 'yes' },
+    entries: s.boxes.some((b) => b.id === box) ? withEntry(s, box, name, entry) : s.entries,
+  }));
+}
+
 export function moveToBox(from: string, to: string, name: string) {
   update((s) => {
     const e = s.entries[from]?.[name];
@@ -295,7 +305,7 @@ export function resetAll() {
   update((s) => ({
     decisions: {},
     history: [],
-    boxes: [{ id: 'b1', name: 'My names' }],
+    boxes: [{ id: 'b1', name: 'Box 1' }],
     activeBox: 'b1',
     entries: { b1: {} },
     partner: null,

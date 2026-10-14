@@ -3,7 +3,7 @@ import { genderOf } from './data/catalog';
 import { APP_NAME } from './config';
 import type { Tier } from './store';
 
-const TIER_TITLES: Record<Tier, string> = { 1: '💖 Love it', 2: '👍 Really like', 3: '🤔 Thinking about it', 0: 'Not ranked yet' };
+const TIER_TITLES: Record<Tier, string> = { 1: 'Love it', 2: 'Really like', 3: 'Maybe', 0: 'Not ranked' };
 const COLORS = { m: ['#cde4f6', '#284860'], f: ['#f8d5e0', '#6a2e44'], u: ['#e3dbf5', '#47396c'] } as const;
 const PLAIN = ['#fff8ec', '#4b4036'] as const;
 
@@ -76,7 +76,7 @@ export async function boxImage(title: string, names: [string, Tier][], neutral: 
 
   ctx.fillStyle = '#7f8c85';
   ctx.font = '700 26px Nunito, sans-serif';
-  ctx.fillText(`Made with ${APP_NAME} 🍼`, pad, H - 40);
+  ctx.fillText(`Made with ${APP_NAME}`, pad, H - 40);
 
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob failed'))), 'image/png'));
 }

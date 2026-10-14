@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { GROUPS, getCatalog, type Gender } from '../data/catalog';
 import { DEFAULT_DECKS, updateSettings, type State } from '../store';
 import { deckCount } from '../queue';
+import { CheckIcon } from './icons';
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
 const GENDERS: { key: Gender; label: string }[] = [
@@ -28,7 +29,7 @@ function DeckChip({ id, label, state, counts }: { id: string; label: string; sta
       onClick={() => updateSettings({ decks: on ? state.settings.decks.filter((d) => d !== id) : [...state.settings.decks, id] })}
     >
       <span className="deck-chip-check" aria-hidden="true">
-        {on ? '✓' : ''}
+        {on && <CheckIcon size={14} />}
       </span>
       <span className="deck-chip-label">{label}</span>
       {count && <span className="deck-chip-count">{count.left.toLocaleString()}</span>}

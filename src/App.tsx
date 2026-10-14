@@ -6,7 +6,7 @@ import { readPartnerHash } from './share';
 import { Deck, type DeckHandle, type Dir, type Returning } from './components/Deck';
 import { Sheet } from './components/Sheet';
 import { HistoryPanel, SettingsPanel } from './components/Panels';
-import { BoxPanel, ComparePanel, NameActions } from './components/Box';
+import { BoxPage, BoxesPage, ComparePanel, NameActions } from './components/Box';
 import { DeckPicker } from './components/DeckPicker';
 import { ListView } from './components/ListView';
 import { Tutorial } from './components/Tutorial';
@@ -18,9 +18,15 @@ const ACTION_DIR: Record<Action, Dir> = { yes: 'right', no: 'left', maybe: 'up' 
 
 type Panel = 'history' | 'settings' | 'decks' | null;
 /** Full pages (not pop-ups). They live in the URL hash so the phone's back gesture works. */
-type Page = 'home' | 'box' | 'compare';
+type Page = 'home' | 'boxes' | 'box' | 'compare';
 
-const readPage = (): Page => (window.location.hash === '#box' ? 'box' : window.location.hash === '#compare' ? 'compare' : 'home');
+function readRoute(): { page: Page; boxId: string } {
+  const h = window.location.hash;
+  if (h === '#boxes') return { page: 'boxes', boxId: '' };
+  if (h.startsWith('#box/')) return { page: 'box', boxId: decodeURIComponent(h.slice(5)) };
+  if (h === '#compare') return { page: 'compare', boxId: '' };
+  return { page: 'home', boxId: '' };
+}
 
 export default function App() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -39,7 +45,7 @@ export default function App() {
   if (!catalog) {
     return (
       <div className="loading">
-        <div className="loading-mark">🍼</div>
+        <img className="loading-mark" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" width={56} height={56} />
         <p>{failed ? "Couldn't load the names. Check your connection and refresh." : `Gathering names…`}</p>
       </div>
     );
@@ -58,18 +64,21 @@ function Main() {
   const [incoming, setIncoming] = useState<Partner | null>(() => readPartnerHash(window.location.hash));
   const [mode, setMode] = useState<'swipe' | 'list'>('swipe');
   const [bump, setBump] = useState(0);
-  const [page, setPage] = useState<Page>(readPage);
+  const [route, setRoute] = useState(readRoute);
+  const page = route.page;
   const deck = useRef<DeckHandle>(null);
 
   useEffect(() => {
-    const onHash = () => setPage(readPage());
+    const onHash = () => setRoute(readRoute());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const openPage = useCallback((p: Page) => {
-    if (p === 'home') {
-      if (readPage() !== 'home') history.back();
-    } else window.location.hash = p;
+  const back = useCallback(() => {
+    if (readRoute().page !== 'home') history.back();
+  }, []);
+  const goHome = useCallback(() => {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    setRoute(readRoute());
   }, []);
 
   // Changing decks or filters rebuilds the pile right away from everything not yet sorted.
@@ -182,7 +191,7 @@ function Main() {
             </div>
           </header>
 
-          {state.saveFailed && <div className="save-warning">⚠️ Not saving: your browser is blocking storage</div>}
+          {state.saveFailed && <div className="save-warning">Not saving: your browser is blocking storage</div>}
 
           <main className={`stage stage--${mode}`}>
             {mode === 'swipe' ? (
@@ -209,7 +218,7 @@ function Main() {
                 </button>
               </>
             )}
-            <button className="ctl ctl--sm ctl--box" onClick={() => openPage('box')} aria-label={`My names, ${boxCount}`}>
+            <button className="ctl ctl--sm ctl--box" onClick={() => (window.location.hash = 'boxes')} aria-label={`Your boxes, ${boxCount} names`}>
               <BoxIcon size={20} />
               {boxCount > 0 && (
                 <span className="badge" key={bump}>
@@ -222,14 +231,24 @@ function Main() {
       ) : (
         <div className="page">
           <header className="page-head">
-            <button className="icon-btn page-back" onClick={() => openPage('home')} aria-label="Back">
+            <button className="icon-btn page-back" onClick={back} aria-label="Back">
               <BackIcon size={24} />
             </button>
-            <h1>{page === 'box' ? 'My names' : state.partner ? `You & ${state.partner.name || 'your partner'}` : 'Compare with your partner'}</h1>
+            <h1>
+              {page === 'boxes'
+                ? 'Your boxes'
+                : page === 'box'
+                  ? (state.boxes.find((b) => b.id === route.boxId)?.name ?? '')
+                  : state.partner
+                    ? `You & ${state.partner.name || 'your partner'}`
+                    : 'Compare with your partner'}
+            </h1>
           </header>
           <div className="page-body">
-            {page === 'box' ? (
-              <BoxPanel state={state} onOpenName={setOpenName} onCompare={() => openPage('compare')} />
+            {page === 'boxes' ? (
+              <BoxesPage state={state} onOpenBox={(id) => (window.location.hash = `box/${encodeURIComponent(id)}`)} onCompare={() => (window.location.hash = 'compare')} />
+            ) : page === 'box' ? (
+              <BoxPage state={state} boxId={route.boxId} onOpenName={setOpenName} onGone={back} />
             ) : (
               <ComparePanel
                 state={state}
@@ -237,8 +256,7 @@ function Main() {
                 onSwipePartner={() => {
                   if (!decks.includes('partner')) updateSettings({ decks: [...decks, 'partner'] });
                   setMode('swipe');
-                  history.replaceState(null, '', window.location.pathname + window.location.search);
-                  setPage('home');
+                  goHome();
                 }}
               />
             )}
@@ -264,7 +282,7 @@ function Main() {
       <Sheet open={openName !== null} onClose={closeName} title="" level={2}>
         {openName && <NameActions state={state} name={openName} onPick={setOpenName} />}
       </Sheet>
-      <Sheet open={incoming !== null} onClose={() => setIncoming(null)} title="💞 A list for you" level={3}>
+      <Sheet open={incoming !== null} onClose={() => setIncoming(null)} title="A list for you" level={3}>
         {incoming && (
           <div className="incoming">
             <p>
@@ -279,7 +297,7 @@ function Main() {
               onClick={() => {
                 setPartner(incoming);
                 setIncoming(null);
-                openPage('compare');
+                window.location.hash = 'compare';
               }}
             >
               Compare our names

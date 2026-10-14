@@ -272,8 +272,8 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
     <div className="deck">
       {visible.length === 0 && (
         <div className="card card--empty">
-          <div className="card-name card-name--l">All sorted 🎉</div>
-          <p className="card-sub">You've been through every name in these decks. Tap 🌍 to open more.</p>
+          <div className="card-name card-name--l">All sorted</div>
+          <p className="card-sub">You've been through every name in these decks. Tap Names at the top to open more.</p>
         </div>
       )}
       {visible
