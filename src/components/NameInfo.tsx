@@ -94,6 +94,7 @@ export function CardBack({ name }: { name: string }) {
         </p>
       )}
       {info && !d && !info.fiction && <p className="back-meaning">We don't have notes on this one yet.</p>}
+      <div className="card-hint">tap to flip back</div>
     </div>
   );
 }

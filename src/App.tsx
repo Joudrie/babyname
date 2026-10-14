@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { getCatalog, loadCatalog, type Catalog } from './data/catalog';
 import { decide, getState, setPartner, setTutorialDone, undo, updateSettings, useStore, type Action, type Partner } from './store';
-import { buildQueue, mixProgress } from './queue';
+import { buildQueue, mixProgress, mixSet } from './queue';
 import { readPartnerHash } from './share';
 import { Deck, type DeckHandle, type Dir, type Returning } from './components/Deck';
 import { Sheet } from './components/Sheet';
@@ -72,12 +72,15 @@ function Main() {
     if (historyEmpty) setQueue(buildQueue(c, getState()));
   }, [historyEmpty, c]);
 
-  // A name decided outside the deck (list, history, name sheet) leaves the pile.
+  // A name decided outside the deck (list, history, name sheet) leaves the pile. Only the names whose
+  // decision changed are checked, so a normal swipe (already removed) costs next to nothing.
+  const prevDecisions = useRef(state.decisions);
   useEffect(() => {
-    setQueue((q) => {
-      const next = q.filter((n) => !state.decisions[n]);
-      return next.length === q.length ? q : next;
-    });
+    const prev = prevDecisions.current;
+    prevDecisions.current = state.decisions;
+    const changed = Object.keys(state.decisions).filter((n) => prev[n] !== state.decisions[n]);
+    if (!changed.length) return;
+    setQueue((q) => (changed.some((n) => q.includes(n)) ? q.filter((n) => !state.decisions[n]) : q));
   }, [state.decisions]);
 
   // Opened from a partner's link: offer to compare, then tidy the URL.
@@ -125,7 +128,8 @@ function Main() {
     return () => window.removeEventListener('keydown', onKey);
   }, [panel, openName, mode, onUndo]);
 
-  const progress = useMemo(() => mixProgress(c, state), [c, state.decisions, mixKey, state.partner]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mix = useMemo(() => mixSet(c, getState()), [c, mixKey, state.partner]); // eslint-disable-line react-hooks/exhaustive-deps
+  const progress = useMemo(() => mixProgress(c, state, mix), [c, state.decisions, mix]); // eslint-disable-line react-hooks/exhaustive-deps
   const boxCount = Object.keys(state.entries[state.activeBox] ?? {}).length;
   const close = useCallback(() => setPanel(null), []);
   const closeName = useCallback(() => setOpenName(null), []);

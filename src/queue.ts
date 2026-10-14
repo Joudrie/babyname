@@ -48,19 +48,22 @@ export function buildQueue(c: Catalog, s: State): string[] {
   return out.map((i) => c.names[i]);
 }
 
-/** Sorted / total for the current deck mix, for the small counter at the top. */
-export function mixProgress(c: Catalog, s: State): { sorted: number; total: number } {
+/** Every name (as an index) in the current deck mix under the filters, decided or not. */
+export function mixSet(c: Catalog, s: State): Set<number> {
   const keep = makeFilter(c, s);
-  const seen = new Set<number>();
+  const out = new Set<number>();
+  for (const id of s.settings.decks) for (const i of deckMembers(c, s, id)) if (keep(i)) out.add(i);
+  return out;
+}
+
+/** Sorted / total for the current deck mix. Only walks the decisions, so it's cheap on every swipe. */
+export function mixProgress(c: Catalog, s: State, mix: Set<number>): { sorted: number; total: number } {
   let sorted = 0;
-  for (const id of s.settings.decks) {
-    for (const i of deckMembers(c, s, id)) {
-      if (seen.has(i) || !keep(i)) continue;
-      seen.add(i);
-      if (s.decisions[c.names[i]]) sorted++;
-    }
+  for (const name in s.decisions) {
+    const i = c.index.get(name);
+    if (i !== undefined && mix.has(i)) sorted++;
   }
-  return { sorted, total: seen.size };
+  return { sorted, total: mix.size };
 }
 
 /** Left / total for one deck under the current filters. */

@@ -8,9 +8,10 @@ export interface OriginMeta {
   group: GroupKey;
 }
 
-export type GroupKey = 'special' | 'west' | 'east' | 'mena' | 'asia' | 'africa' | 'americas';
+export type GroupKey = 'special' | 'world' | 'west' | 'east' | 'mena' | 'asia' | 'africa' | 'americas';
 
 export const GROUPS: { key: GroupKey; label: string; open?: boolean }[] = [
+  { key: 'world', label: 'Popular in other countries', open: true },
   { key: 'west', label: 'Western Europe', open: true },
   { key: 'east', label: 'Eastern Europe' },
   { key: 'mena', label: 'Middle East & North Africa' },
@@ -94,7 +95,17 @@ interface RawCore {
   popular: number[];
   trending: number[];
   eras: number[][];
+  countries?: Record<string, number[]>;
 }
+
+/** Recent most-given names from each country's official statistics. */
+const COUNTRIES: Record<string, { label: string; hint: string }> = {
+  uk: { label: '🇬🇧 England & Wales', hint: 'ONS, 2016–2025' },
+  ie: { label: '🇮🇪 Ireland', hint: 'CSO, 2015–2024' },
+  fr: { label: '🇫🇷 France', hint: 'INSEE, 2012–2021' },
+  es: { label: '🇪🇸 Spain', hint: 'INE, top names by decade' },
+  no: { label: '🇳🇴 Norway', hint: 'SSB, 2015–2024' },
+};
 
 const BASE = `${import.meta.env.BASE_URL}data/`;
 let catalog: Catalog | null = null;
@@ -144,6 +155,9 @@ export async function loadCatalog(): Promise<Catalog> {
     { id: 'origin:myth', label: 'Mythology', group: 'featured' },
     { id: 'origin:biblical', label: 'Biblical', group: 'featured' },
     { id: 'everything', label: 'Explore everything', group: 'featured', hint: 'Every name we have' },
+    ...Object.keys(raw.countries ?? {})
+      .filter((k) => COUNTRIES[k])
+      .map((k) => ({ id: `country:${k}`, label: COUNTRIES[k].label, group: 'world' as const, hint: COUNTRIES[k].hint })),
     ...Object.entries(ORIGIN_META)
       .filter(([, m]) => m.group !== 'special')
       .map(([key, m]) => ({ id: `origin:${key}`, label: m.label, group: m.group })),
@@ -164,6 +178,7 @@ export async function loadCatalog(): Promise<Catalog> {
       const key = id.slice(7);
       list = [...(byOrigin[key] ?? []), ...(byOriginSecondary[key] ?? [])];
     } else if (id.startsWith('era:')) list = raw.eras[+id.slice(4)] ?? [];
+    else if (id.startsWith('country:')) list = raw.countries?.[id.slice(8)] ?? [];
     else if (id.startsWith('year:') && years) {
       const y = years[id.slice(5)];
       list = y ? [...(y.m ?? []), ...(y.f ?? [])] : [];

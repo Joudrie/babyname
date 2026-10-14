@@ -155,7 +155,6 @@ button {
   border-radius: 30px;
   color: var(--card-ink);
   box-shadow: var(--shadow-card);
-  perspective: 1400px;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
@@ -179,10 +178,12 @@ button {
   --card-ink: var(--plain-ink);
 }
 
+.deck .card {
+  will-change: transform;
+}
 .card.depth-0 {
   z-index: 3;
   cursor: grab;
-  will-change: transform;
 }
 .card.depth-1 {
   z-index: 2;
@@ -237,8 +238,16 @@ button {
 .card-flip {
   position: absolute;
   inset: 0;
-  transform-style: preserve-3d;
   transition: transform 0.5s cubic-bezier(0.3, 0.7, 0.2, 1.05);
+}
+/* 3D only where a flip can happen, so the cards underneath stay cheap to draw. */
+.depth-0,
+.card--flying {
+  perspective: 1400px;
+}
+.depth-0 .card-flip,
+.card--flying .card-flip {
+  transform-style: preserve-3d;
 }
 .card-flip.is-flipped {
   transform: rotateY(180deg);
@@ -593,53 +602,6 @@ button {
 }
 .panel-note {
   margin: 0 0 10px;
-}
-
-/* Box */
-
-.box-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.box-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 6px 8px 14px;
-  border-radius: 14px;
-  background: var(--card-bg);
-  color: var(--card-ink);
-  font-family: var(--font-name);
-  font-weight: 600;
-  font-size: 18px;
-}
-.box-row--m {
-  --card-bg: var(--boy);
-  --card-ink: var(--boy-ink);
-}
-.box-row--f {
-  --card-bg: var(--girl);
-  --card-ink: var(--girl-ink);
-}
-.box-row--u {
-  --card-bg: var(--uni);
-  --card-ink: var(--uni-ink);
-}
-.theme-neutral .box-row {
-  --card-bg: var(--plain);
-  --card-ink: var(--plain-ink);
-}
-.box-remove {
-  width: 26px;
-  height: 26px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  opacity: 0.45;
 }
 
 /* History: dense on purpose, ~25 rows per phone screen. */

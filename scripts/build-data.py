@@ -5,13 +5,17 @@ Sources (not committed, they're large):
     MIT-licensed `usbabynames` npm package (sqlite/us-name-data.sqlite, sqlite/us-name-details.sqlite).
   - Name variants (Stephen / Steven / Esteban / Stefano…) are read out of the details' notes.
 
-Usage: python3 scripts/build-data.py <dir with the two .sqlite files>
+  - Optional: other countries' official name statistics in <intl dir> (see load_intl below):
+    England & Wales (ONS), Ireland (CSO), France (INSEE), Spain (INE), Norway (SSB).
+
+Usage: python3 scripts/build-data.py <dir with the two .sqlite files> [intl dir]
 """
 import json, math, re, sqlite3, sys, collections, os
 sys.path.insert(0, os.path.dirname(__file__))
 from fiction import FICTION
 
 SRC = sys.argv[1]
+INTL = sys.argv[2] if len(sys.argv) > 2 else None
 OUT = os.path.join(os.path.dirname(__file__), '..', 'public', 'data')
 MIN_BIRTHS = 500          # all-time US births needed to be included
 DECADES = list(range(1880, 2030, 10))
@@ -161,7 +165,7 @@ def main():
             g = 'm' if share_m > 0.5 else 'f'
         det = details.get(name, {})
         d = det.get('m' if g == 'm' else 'f') or det.get('f') or det.get('m') or {}
-        display = d.get('name') if isinstance(d.get('name'), str) and d['name'].lower() == name else name.capitalize()
+        display = d.get('name') if isinstance(d.get('name'), str) and d['name'].lower() == name and d['name'] != name else name.capitalize()
         origins = origins_from(d) if d else []
         series = by_decade[name]
         peak = max(range(len(DECADES)), key=lambda i: series[i] / max(1, sum(decade_totals[i].values())))
@@ -186,6 +190,10 @@ def main():
     for e in entries:
         if e['name'] not in fiction_src and 'fiction' in e['origins']:
             e['origins'].remove('fiction')
+
+    countries = {}
+    if INTL:
+        countries = merge_intl(entries, details)
 
     index = {e['key']: i for i, e in enumerate(entries)}
 
@@ -215,8 +223,9 @@ def main():
             str(e.get('peak', -1)) if e.get('total') else '', str(pop(e)) if e.get('total') else '0',
         ]))
     os.makedirs(os.path.join(OUT, 'details'), exist_ok=True)
+    country_decks = {k: [index[n] for n in v['names'] if n in index] for k, v in countries.items()}
     core = {'v': 1, 'origins': ORIGINS, 'decades': DECADES, 'names': core_rows,
-            'popular': popular, 'trending': trending, 'eras': eras}
+            'popular': popular, 'trending': trending, 'eras': eras, 'countries': country_decks}
     json.dump(core, open(os.path.join(OUT, 'names.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
     json.dump(years, open(os.path.join(OUT, 'years.json'), 'w'), separators=(',', ':'))
     json.dump(fiction_src, open(os.path.join(OUT, 'fiction.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
@@ -272,6 +281,139 @@ def variants_from_notes(details, entries, index):
 def shard_of(name):
     c = name[0].lower()
     return c if 'a' <= c <= 'z' else 'other'
+
+
+COUNTRY_ORIGIN = {'uk': 'english', 'ie': 'irish', 'fr': 'french', 'es': 'spanish', 'no': 'nordic'}
+
+
+def fold(name):
+    """Lowercase without accents, to match "Chloé" (France) with "Chloe" (US)."""
+    import unicodedata
+    return ''.join(c for c in unicodedata.normalize('NFD', name.lower()) if unicodedata.category(c) != 'Mn')
+
+
+def title(name):
+    return '-'.join(p[:1].upper() + p[1:].lower() for p in name.split('-'))
+
+
+def load_intl(d):
+    """Each country's most-given names in recent years as {country: [(name, sex, count)]}, most given first."""
+    import csv, openpyxl, xlrd
+    out = {}
+
+    def top(counts, per_sex):
+        rows = []
+        for sex in ('M', 'F'):
+            ranked = sorted(((n, c) for (n, s_), c in counts.items() if s_ == sex), key=lambda x: -x[1])[:per_sex]
+            rows += [(n, sex, c) for n, c in ranked]
+        return sorted(rows, key=lambda r: -r[2])
+
+    # England & Wales: Table_1 girls, Table_2 boys, columns "<year> Count".
+    p = os.path.join(d, 'ons.xlsx')
+    if os.path.exists(p):
+        wb = openpyxl.load_workbook(p, read_only=True)
+        counts = collections.Counter()
+        for sheet, sex in (('Table_1', 'F'), ('Table_2', 'M')):
+            rows = wb[sheet].iter_rows(values_only=True)
+            header = None
+            for r in rows:
+                if header is None:
+                    if r and r[0] == 'Name':
+                        header = [str(h or '') for h in r]
+                        cols = [i for i, h in enumerate(header) if h.endswith('Count') and int(h[:4]) >= 2016]
+                    continue
+                for i in cols:
+                    if isinstance(r[i], int):
+                        counts[(str(r[0]).strip(), sex)] += r[i]
+        out['uk'] = top(counts, 500)
+
+    # Ireland: CSO VSA50 (boys) / VSA60 (girls), the "Number" statistic.
+    counts = collections.Counter()
+    for f, sex in (('VSA50.csv', 'M'), ('VSA60.csv', 'F')):
+        p = os.path.join(d, f)
+        if not os.path.exists(p):
+            continue
+        with open(p, encoding='utf-8-sig') as fh:
+            for r in csv.reader(fh):
+                if len(r) < 8 or 'Rank' in r[1] or not r[2].isdigit() or int(r[2]) < 2015 or not r[7]:
+                    continue
+                counts[(r[5].strip(), sex)] += int(float(r[7]))
+    if counts:
+        out['ie'] = top(counts, 300)
+
+    # France: INSEE nat2021.csv, sexe 1 = boy, 2 = girl.
+    p = os.path.join(d, 'nat2021.csv')
+    if os.path.exists(p):
+        counts = collections.Counter()
+        with open(p, encoding='utf-8') as fh:
+            for r in csv.reader(fh, delimiter=';'):
+                if len(r) < 4 or not r[2].isdigit() or int(r[2]) < 2012 or r[1].startswith('_') or len(r[1]) < 2:
+                    continue
+                counts[(title(r[1]), 'M' if r[0] == '1' else 'F')] += int(r[3])
+        out['fr'] = top(counts, 500)
+
+    # Spain: INE top 50 per decade of birth; newer decades first.
+    p = os.path.join(d, 'ine_fecha.xls')
+    if os.path.exists(p):
+        b = xlrd.open_workbook(p)
+        rows = []
+        seen = set()
+        for sheet, sex in (('ESPAÑA_hombres', 'M'), ('ESPAÑA_mujeres', 'F')):
+            sh = b.sheet_by_name(sheet)
+            # Columns repeat per decade as NOMBRE, FRECUENCIA, Por 1.000 starting at column 1.
+            for col in range(1 + 3 * ((sh.ncols - 2) // 3), 0, -3):
+                for r in range(5, sh.nrows):
+                    name, freq = sh.cell_value(r, col), sh.cell_value(r, col + 1)
+                    if isinstance(name, str) and name.strip() and isinstance(freq, float):
+                        key = (title(name.strip()), sex)
+                        if key not in seen:
+                            seen.add(key)
+                            rows.append((key[0], sex, -len(rows)))
+        out['es'] = sorted(rows, key=lambda r: -r[2])
+
+    # Norway: SSB table 10467 as json-stat2; name codes start with 1 (girls) or 2 (boys).
+    p = os.path.join(d, 'ssb.json')
+    if os.path.exists(p):
+        j = json.load(open(p))
+        cat = j['dimension']['Fornavn']['category']
+        nyears = j['size'][2]
+        counts = collections.Counter()
+        for code, pos in cat['index'].items():
+            total = sum(v or 0 for v in j['value'][pos * nyears:(pos + 1) * nyears])
+            if total:
+                counts[(cat['label'][code], 'F' if code.startswith('1') else 'M')] += total
+        out['no'] = top(counts, 300)
+    return out
+
+
+def merge_intl(entries, details):
+    """Adds country decks, creating entries for names the US data doesn't have (with details when known)."""
+    by_fold = {}
+    for e in entries:
+        by_fold.setdefault(fold(e['name']), e)
+    decks = {}
+    for country, rows in load_intl(INTL).items():
+        names = []
+        sexes = collections.defaultdict(set)
+        for name, sex, _ in rows:
+            sexes[fold(name)].add(sex)
+        for name, sex, _ in rows:
+            f = fold(name)
+            e = by_fold.get(f)
+            if e is None:
+                g = 'u' if len(sexes[f]) > 1 else ('m' if sex == 'M' else 'f')
+                det = details.get(f) or details.get(name.lower()) or {}
+                d = det.get(g if g != 'u' else 'f') or det.get('m') or det.get('f') or {}
+                origins = [o for o in origins_from(d) if o != 'american'] if d else []
+                e = {'key': f, 'name': name, 'g': g, 'total': 0, 'origins': origins or [COUNTRY_ORIGIN[country]], 'peak': -1,
+                     'meaning': meaning_of(d) if d else '', 'pron': d.get('pronunciation', '') if d else '', 'series': [0] * len(DECADES)}
+                entries.append(e)
+                by_fold[f] = e
+            if e['key'] not in names:
+                names.append(e['key'])
+        decks[country] = {'names': names}
+        print(country, len(names), 'names')
+    return decks
 
 
 if __name__ == '__main__':

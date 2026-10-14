@@ -35,12 +35,19 @@ const GENDER_LABEL: Record<Gender, string> = { m: 'boy', f: 'girl', u: 'unisex' 
 const VISIBLE = 3;
 
 const clamp01 = (n: number) => (n < 0 ? 0 : n > 1 ? 1 : n);
+
+// Reading window.innerWidth right after the DOM changes forces a synchronous layout, which stalls a
+// swipe on slower phones. The size is read once and refreshed only when the window actually resizes.
+const viewport = { w: window.innerWidth, h: window.innerHeight };
+window.addEventListener('resize', () => {
+  viewport.w = window.innerWidth;
+  viewport.h = window.innerHeight;
+});
 const cardTransform = (dx: number, dy: number) => `translate3d(${dx}px,${dy}px,0) rotate(${dx * 0.05}deg)`;
 
 /** Where a card ends up once it leaves the screen in a given direction. */
 function offscreen(dir: Dir, dx = 0, dy = 0) {
-  const w = window.innerWidth;
-  const h = window.innerHeight;
+  const { w, h } = viewport;
   if (dir === 'up') return `translate3d(${dx * 0.6}px,${-h * 1.1}px,0) rotate(${dx * 0.03}deg)`;
   const x = (dir === 'right' ? 1 : -1) * (w * 0.75 + 320);
   return `translate3d(${x}px,${dy + dy * 0.4}px,0) rotate(${dir === 'right' ? 28 : -28}deg)`;
@@ -53,7 +60,7 @@ function setStamps(el: HTMLElement, like: number, nope: number, maybe: number) {
   el.style.setProperty('--s-maybe', String(maybe));
 }
 
-const CardFace = memo(function CardFace({ name, lastName, flipped, live }: { name: string; lastName: string; flipped: boolean; live: boolean }) {
+const CardFace = memo(function CardFace({ name, lastName, flipped }: { name: string; lastName: string; flipped: boolean }) {
   const gender = genderOf(name);
   const size = name.length > 10 ? 'xl' : name.length > 7 ? 'l' : 'm';
   return (
@@ -71,7 +78,8 @@ const CardFace = memo(function CardFace({ name, lastName, flipped, live }: { nam
         <div className="stamp stamp--nope">nope</div>
         <div className="stamp stamp--maybe">maybe</div>
       </div>
-      <div className="face face--back">{(flipped || live) && <CardBack name={name} />}</div>
+      {/* The back is only built once the card is flipped; its data is prefetched, so the flip is instant. */}
+      <div className="face face--back">{flipped && <CardBack name={name} />}</div>
     </div>
   );
 });
@@ -93,7 +101,7 @@ function FlyingCard({ f, lastName, onDone }: { f: Flying; lastName: string; onDo
   }, [f, onDone]);
   return (
     <div ref={ref} className={`card card--${genderOf(f.name)} card--flying`} aria-hidden="true">
-      <CardFace name={f.name} lastName={lastName} flipped={f.flipped} live={false} />
+      <CardFace name={f.name} lastName={lastName} flipped={f.flipped} />
     </div>
   );
 }
@@ -235,7 +243,7 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
     const vx = (last.x - first.x) / dt;
     const vy = (last.y - first.y) / dt;
 
-    const line = Math.min(120, window.innerWidth * 0.28);
+    const line = Math.min(120, viewport.w * 0.28);
     const flick = 0.55;
     let dir: Dir | null = null;
     if (Math.abs(d.dx) >= Math.abs(d.dy)) {
@@ -280,7 +288,7 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
             onPointerCancel={i === 0 ? onPointerUp : undefined}
             aria-hidden={i !== 0}
           >
-            <CardFace name={name} lastName={lastName} flipped={i === 0 && isFlipped} live={i === 0} />
+            <CardFace name={name} lastName={lastName} flipped={i === 0 && isFlipped} />
           </div>
         ))
         .reverse()}
