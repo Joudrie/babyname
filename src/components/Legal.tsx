@@ -69,7 +69,7 @@ export function TermsPage() {
       <h2>About the name information</h2>
       <p>
         Popularity numbers come from official government statistics (the US Social Security Administration, England &amp; Wales ONS, Ireland CSO,
-        France INSEE, Spain INE and Norway SSB). Meanings, origins, pronunciations and other versions come from open-source collections and are a guide,
+        France INSEE, Spain INE, Norway SSB and National Records of Scotland). Meanings, origins, pronunciations and other versions come from open-source collections and are a guide,
         not gospel. Some may be wrong. Please double-check anything that matters to you before you name a child.
       </p>
 
@@ -82,7 +82,7 @@ export function TermsPage() {
       <h2>Credits</h2>
       <p>
         Name data: US Social Security Administration via the MIT-licensed usbabynames project; nicknames from the Apache-2.0 nicknames list by Old Dominion
-        University; official statistics from the agencies above.
+        University; names and meanings from Wiktionary (CC BY-SA) via kaikki.org; official statistics from the agencies above.
       </p>
 
       <h2>Changes</h2>

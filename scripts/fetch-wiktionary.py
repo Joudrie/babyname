@@ -1,102 +1,99 @@
-"""Downloads given names from Wiktionary's name categories (CC BY-SA), for languages the US data covers
-thinly: Yoruba, Igbo, Turkish, the English spellings of Arabic / Hindi / Chinese names, and so on.
+"""Collects given names from Wiktionary (CC BY-SA) via kaikki.org's machine-readable copies, for languages the
+US data covers thinly: Yoruba, Igbo, Hausa, Turkish, plus the English spellings of Arabic / Hindi / Chinese names.
+kaikki.org publishes one file of proper names per language, so this needs no Wiktionary API calls.
 
 Usage: python3 scripts/fetch-wiktionary.py <out.json>
 Writes {"names": [[name, language, gender, meaning], ...]}. Gender is m / f / u.
-Polite by design: one request at a time with a pause, and a descriptive User-Agent.
 """
-import json, re, sys, time, urllib.parse, urllib.request
+import json, re, sys, urllib.parse, urllib.request
 
-API = 'https://en.wiktionary.org/w/api.php'
 UA = 'CradleNameBuilder/0.1 (baby name site; contact via github.com/Joudrie/babyname)'
+BASE = 'https://kaikki.org/dictionary/{lang}/pos-name/kaikki.org-dictionary-{file}-by-pos-name.jsonl'
 
-# Only languages the US data covers thinly; Western European names are already well represented.
-# Languages written in the Latin alphabet use their own categories...
+# Languages written in the Latin alphabet: read their own name files.
 NATIVE = ['Yoruba', 'Igbo', 'Hausa', 'Akan', 'Twi', 'Ewe', 'Swahili', 'Zulu', 'Xhosa', 'Somali', 'Shona', 'Turkish', 'Azerbaijani',
           'Vietnamese', 'Indonesian', 'Malay', 'Tagalog', 'Hawaiian', 'Maori', 'Finnish', 'Swedish', 'Polish', 'Czech', 'Hungarian',
           'Romanian', 'Albanian', 'Croatian', 'Lithuanian']
-# ...and languages in other scripts use the English-spelling categories ("English male given names from Arabic").
+# Languages in other scripts: read the English file for "English male given names from Arabic" and similar.
 FROM = ['Arabic', 'Hebrew', 'Persian', 'Hindi', 'Sanskrit', 'Urdu', 'Punjabi', 'Bengali', 'Tamil', 'Chinese', 'Mandarin', 'Japanese',
-        'Korean', 'Russian', 'Greek', 'Armenian', 'Thai', 'Amharic']
-# Many African names are given to boys and girls alike, so those also have unisex categories worth reading.
-UNISEX = {'Yoruba', 'Igbo', 'Hausa', 'Akan', 'Twi', 'Ewe', 'Swahili', 'Zulu', 'Xhosa', 'Somali', 'Shona'}
+        'Korean', 'Russian', 'Greek', 'Armenian', 'Thai', 'Amharic', 'Yoruba', 'Igbo', 'Swahili', 'Turkish']
 LATIN = re.compile(r"^[A-Za-zÀ-ÖØ-öø-ÿĀ-žƀ-ɏḀ-ỿ'’\-]{2,16}$")
+GLOSS = re.compile(r'^An? (?:(male|female|unisex) )?given name from ([A-Z][a-z]+)')
+CAT = re.compile(r'^(?:English )?(male|female|unisex) given names(?: from (.+))?$')
 
 
-def get(params):
-    params = {**params, 'format': 'json', 'formatversion': 2}
-    for attempt in range(8):
-        time.sleep(1.5)
-        try:
-            req = urllib.request.Request(API + '?' + urllib.parse.urlencode(params), headers={'User-Agent': UA})
-            return json.load(urllib.request.urlopen(req, timeout=60))
-        except Exception as e:
-            print('retry', e, file=sys.stderr)
-            time.sleep(20 * (attempt + 1))
-    raise SystemExit(f'gave up on {params}')
+def stream(lang):
+    file = lang.replace(' ', '')
+    url = BASE.format(lang=urllib.parse.quote(file), file=urllib.parse.quote(file))
+    req = urllib.request.Request(url, headers={'User-Agent': UA})
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            for line in r:
+                yield json.loads(line)
+    except Exception as e:
+        print(f'{lang}: {e}', file=sys.stderr)
 
 
-def members(category):
-    out, cont = [], {}
-    while True:
-        d = get({'action': 'query', 'list': 'categorymembers', 'cmtitle': f'Category:{category}', 'cmlimit': 500, 'cmnamespace': 0, **cont})
-        out += [m['title'] for m in d.get('query', {}).get('categorymembers', [])]
-        if 'continue' not in d:
-            return out
-        cont = {'cmcontinue': d['continue']['cmcontinue']}
+def meaning_of(entry):
+    """The meaning from the etymology: the "literally ..." gloss if there is one, otherwise the longest quoted
+    gloss of two or more words, so a part like “lord” in “olú (“lord”) + ...” isn't taken for the whole."""
+    ety = entry.get('etymology_text') or ''
+    lit = re.search(r'literally[,:]? [“"]([^”"]{3,80})[”"]', ety)
+    if lit:
+        return lit.group(1).strip(' ,;.')
+    quotes = [q.strip(' ,;.') for q in re.findall(r'[“"]([^”"]{3,80})[”"]', ety)]
+    quotes = [q for q in quotes if len(q.split()) >= 2]
+    return max(quotes, key=len) if quotes else ''
 
 
-def gloss(wikitext, lang):
-    """The first meaning in quotes from the language's etymology, e.g. “God has done this”."""
-    sec = re.split(r'\n==([^=].*?)==\n', '\n' + wikitext)
-    body = ''
-    for i in range(1, len(sec) - 1, 2):
-        if sec[i].strip() == lang:
-            body = sec[i + 1]
-            break
-    body = body or wikitext
-    ety = body.split('Etymology', 1)[1][:1200] if 'Etymology' in body else body[:1200]
-    m = re.search(r'“([^”]{3,80})”', ety) or re.search(r'\|t=([^|}]{3,80})', ety) or re.search(r"''\"([^\"]{3,80})\"''", ety)
-    if not m:
-        return ''
-    text = re.sub(r'\[\[(?:[^|\]]*\|)?([^\]]*)\]\]', r'\1', m.group(1))
-    text = re.sub(r'\{\{[^}]*\}\}', '', text).strip(' ,;')
-    return text if 3 <= len(text) <= 80 else ''
+def categories(entry):
+    # Categories can sit on the entry itself or on each sense.
+    for c in entry.get('categories', []):
+        yield c['name'] if isinstance(c, dict) else c
+    for s in entry.get('senses', []):
+        for c in s.get('categories', []):
+            yield c['name'] if isinstance(c, dict) else c
 
 
 def main():
-    found = {}  # (name, lang) -> gender set
-    jobs = [(f'{lang} {g} given names', lang) for lang in NATIVE for g in ('male', 'female') + (('unisex',) if lang in UNISEX else ())]
-    jobs += [(f'English {g} given names from {lang}', lang) for lang in FROM for g in ('male', 'female')]
-    for cat, lang in jobs:
-        g = 'm' if ' male ' in f' {cat} ' else 'f' if 'female' in cat else 'u'
-        titles = [t for t in members(cat) if LATIN.match(t)]
-        for t in titles:
-            found.setdefault((t, lang), set()).add(g)
-        print(f'{cat}: {len(titles)}', file=sys.stderr)
+    found = {}
 
-    # Meanings: fetch page text in batches of 50 and read the etymology gloss.
-    by_title = {}
-    for (t, lang) in found:
-        by_title.setdefault(t, []).append(lang)
-    titles = sorted(by_title)
-    meanings = {}
-    for k in range(0, len(titles), 50):
-        batch = titles[k:k + 50]
-        d = get({'action': 'query', 'prop': 'revisions', 'rvprop': 'content', 'rvslots': 'main', 'titles': '|'.join(batch)})
-        for p in d.get('query', {}).get('pages', []):
-            text = (p.get('revisions') or [{}])[0].get('slots', {}).get('main', {}).get('content', '')
-            for lang in by_title.get(p['title'], []):
-                gl = gloss(text, lang if lang not in FROM or lang in NATIVE else 'English')
-                if gl:
-                    meanings[(p['title'], lang)] = gl
-        if k % 1000 == 0:
-            print(f'meanings {k}/{len(titles)}', file=sys.stderr)
+    def add(name, lang, g, meaning):
+        key = (name, lang)
+        gs, mean = found.get(key, (set(), ''))
+        gs.add(g)
+        found[key] = (gs, mean or meaning)
 
-    rows = []
-    for (t, lang), gs in found.items():
-        g = 'u' if len(gs) > 1 or 'u' in gs else next(iter(gs))
-        rows.append([t, lang, g, meanings.get((t, lang), '')])
+    for lang in NATIVE:
+        n = 0
+        for e in stream(lang):
+            word = e.get('word', '')
+            if not LATIN.match(word):
+                continue
+            for c in categories(e):
+                if c.startswith(lang + ' '):
+                    m = CAT.match(c[len(lang) + 1:])
+                    if m and not m.group(2):
+                        add(word, lang, {'male': 'm', 'female': 'f'}.get(m.group(1), 'u'), meaning_of(e))
+                        n += 1
+        print(f'{lang}: {n}', file=sys.stderr)
+
+    wanted = set(FROM)
+    n = 0
+    for e in stream('English'):
+        word = e.get('word', '')
+        if not LATIN.match(word):
+            continue
+        # The source language is in the definition: "A female given name from Arabic".
+        for sense in e.get('senses', []):
+            for gl in sense.get('glosses', []):
+                m = GLOSS.match(gl)
+                if m and m.group(2) in wanted:
+                    add(word, m.group(2), {'male': 'm', 'female': 'f'}.get(m.group(1) or '', 'u'), meaning_of(e))
+                    n += 1
+    print(f'English (from other scripts): {n}', file=sys.stderr)
+
+    rows = [[name, lang, 'u' if len(gs) > 1 or 'u' in gs else next(iter(gs)), meaning] for (name, lang), (gs, meaning) in found.items()]
     json.dump({'names': rows}, open(sys.argv[1], 'w'), ensure_ascii=False)
     print(f'{len(rows)} name/language pairs, {sum(1 for r in rows if r[3])} with meanings', file=sys.stderr)
 

@@ -32,6 +32,8 @@ python3 scripts/build-data.py <dir with us-name-data.sqlite and us-name-details.
   its `sqlite/*.zip`). The meanings in that package are a guide, not gospel.
 - Optional `intl` dir with official statistics: `ons.xlsx` (England & Wales, ONS), `VSA50.csv`/`VSA60.csv`
   (Ireland, CSO), `nat2021.csv` (France, INSEE), `ine_fecha.xls` (Spain, INE), `ssb.json` (Norway, SSB table 10467).
+- `python3 scripts/fetch-wiktionary.py <intl dir>/wiktionary.json` adds names from Wiktionary (CC BY-SA, via kaikki.org) for
+  languages the US data covers thinly (Yoruba, Turkish, Hindi...). Scotland's lists go in the intl dir as `nrs_<year>.xlsx`.
 - Variants come from the name notes; the fiction deck is the hand-picked list in `scripts/fiction.py`.
 - `src/config.ts`: the app name, so a rename is one line.
 

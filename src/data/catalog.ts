@@ -96,6 +96,8 @@ interface RawCore {
   trending: number[];
   eras: number[][];
   countries?: Record<string, number[]>;
+  /** Per origin, names a dictionary confirms for it; these lead that origin's deck. */
+  confirmed?: Record<string, number[]>;
 }
 
 /** Recent most-given names from each country's official statistics. */
@@ -177,7 +179,9 @@ export async function loadCatalog(): Promise<Catalog> {
     else if (id === 'everything') list = all;
     else if (id.startsWith('origin:')) {
       const key = id.slice(7);
-      list = [...(byOrigin[key] ?? []), ...(byOriginSecondary[key] ?? [])];
+      const lead = raw.confirmed?.[key] ?? [];
+      const seen = new Set(lead);
+      list = [...lead, ...[...(byOrigin[key] ?? []), ...(byOriginSecondary[key] ?? [])].filter((i) => !seen.has(i))];
     } else if (id.startsWith('era:')) list = raw.eras[+id.slice(4)] ?? [];
     else if (id.startsWith('country:')) list = raw.countries?.[id.slice(8)] ?? [];
     else if (id.startsWith('year:') && years) {

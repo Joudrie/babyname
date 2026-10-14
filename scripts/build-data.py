@@ -197,8 +197,9 @@ def main():
     if INTL:
         countries = merge_intl(entries, details)
     wikt = os.path.join(INTL or SRC, 'wiktionary.json')
+    confirmed_keys = {}
     if os.path.exists(wikt):
-        merge_wiktionary(entries, wikt)
+        confirmed_keys = merge_wiktionary(entries, wikt)
 
     index = {e['key']: i for i, e in enumerate(entries)}
 
@@ -232,8 +233,10 @@ def main():
         ]))
     os.makedirs(os.path.join(OUT, 'details'), exist_ok=True)
     country_decks = {k: [index[n] for n in v['names'] if n in index] for k, v in countries.items()}
+    # Names a dictionary confirms for an origin lead that origin's deck, most-given first.
+    confirmed = {o: sorted({index[k] for k in keys if k in index}) for o, keys in confirmed_keys.items()}
     core = {'v': 1, 'origins': ORIGINS, 'decades': DECADES, 'names': core_rows,
-            'popular': popular, 'trending': trending, 'eras': eras, 'countries': country_decks}
+            'popular': popular, 'trending': trending, 'eras': eras, 'countries': country_decks, 'confirmed': confirmed}
     json.dump(core, open(os.path.join(OUT, 'names.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
     json.dump(years, open(os.path.join(OUT, 'years.json'), 'w'), separators=(',', ':'))
     json.dump(fiction_src, open(os.path.join(OUT, 'fiction.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
@@ -492,6 +495,7 @@ def merge_wiktionary(entries, path):
     for e in entries:
         by_fold.setdefault(fold(e['name']), e)
     added = tagged = 0
+    confirmed = collections.defaultdict(list)
     for name, lang, g, meaning in rows:
         origin = WIKT_ORIGIN.get(lang)
         if not origin:
@@ -506,16 +510,20 @@ def merge_wiktionary(entries, path):
             added += 1
         elif e['g'] != g and not e.get('total') and g in 'mf' and e['g'] in 'mf':
             e['g'] = 'u'
-        if origin not in e['origins']:
-            # Names the US data only knew as "modern American" get their real origin first.
-            if e['origins'] == ['american']:
-                e['origins'] = [origin]
-            else:
-                e['origins'].append(origin)
+        # Only fill in an origin where we had none (or just "modern American"): Wiktionary also lists
+        # borrowed names, like Maria under Yoruba, and those shouldn't relabel a familiar name.
+        if not e['origins'] or e['origins'] == ['american']:
+            e['origins'] = [origin]
+            tagged += 1
+        elif not e.get('total') and origin not in e['origins']:
+            e['origins'].append(origin)
             tagged += 1
         if meaning and not e['meaning']:
             e['meaning'] = f'{lang}: {meaning}'
+        if origin in e['origins']:
+            confirmed[origin].append(e['key'])
     print(f'wiktionary: {added} new names, {tagged} origin tags added')
+    return confirmed
 
 
 if __name__ == '__main__':
