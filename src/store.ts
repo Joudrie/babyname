@@ -57,6 +57,17 @@ export interface State {
   tutorialDone: boolean;
   /** True when the browser refused our last save, so the UI can say so instead of silently losing swipes. */
   saveFailed: boolean;
+  /** The box deleted a moment ago, kept (not saved) so "Undo" can bring it back exactly. */
+  deletedBox: DeletedBox | null;
+}
+
+export interface DeletedBox {
+  box: Box;
+  index: number;
+  entries: Record<string, BoxEntry>;
+  decisions: Record<string, Decision>;
+  wasActive: boolean;
+  t: number;
 }
 
 const KEY = 'cradle:v1';
@@ -95,6 +106,7 @@ const DEFAULTS: State = {
   },
   tutorialDone: false,
   saveFailed: false,
+  deletedBox: null,
 };
 
 function load(): State {
@@ -107,6 +119,7 @@ function load(): State {
       ...saved,
       settings: { ...DEFAULTS.settings, ...saved.settings, genders: { ...DEFAULTS.settings.genders, ...saved.settings?.genders } },
       saveFailed: false,
+      deletedBox: null,
     };
     // Saves from before boxes existed: every liked name goes into the first box.
     if (!saved.entries) {
@@ -133,7 +146,7 @@ function flush() {
     clearTimeout(saveTimer);
     saveTimer = undefined;
   }
-  const { saveFailed: _, ...persisted } = state;
+  const { saveFailed: _, deletedBox: __, ...persisted } = state;
   let failed = false;
   try {
     localStorage.setItem(KEY, JSON.stringify(persisted));
@@ -279,9 +292,43 @@ export function deleteBox(id: string) {
     const boxes = s.boxes.filter((b) => b.id !== id);
     const { [id]: removed = {}, ...entries } = s.entries;
     const decisions = { ...s.decisions };
-    for (const name of Object.keys(removed)) if (!boxes.some((b) => entries[b.id]?.[name])) delete decisions[name];
-    return { boxes, entries, decisions, activeBox: s.activeBox === id ? boxes[0].id : s.activeBox };
+    const before: Record<string, Decision> = {};
+    for (const name of Object.keys(removed)) {
+      if (boxes.some((b) => entries[b.id]?.[name])) continue;
+      before[name] = decisions[name];
+      delete decisions[name];
+    }
+    const deletedBox: DeletedBox = {
+      box: s.boxes.find((b) => b.id === id)!,
+      index: s.boxes.findIndex((b) => b.id === id),
+      entries: removed,
+      decisions: before,
+      wasActive: s.activeBox === id,
+      t: Date.now(),
+    };
+    return { boxes, entries, decisions, activeBox: s.activeBox === id ? boxes[0].id : s.activeBox, deletedBox };
   });
+}
+
+/** Brings back the box deleted a moment ago, with its names. */
+export function undoDeleteBox() {
+  update((s) => {
+    const d = s.deletedBox;
+    if (!d) return {};
+    const boxes = [...s.boxes];
+    boxes.splice(Math.min(d.index, boxes.length), 0, d.box);
+    return {
+      boxes,
+      entries: { ...s.entries, [d.box.id]: d.entries },
+      decisions: { ...s.decisions, ...d.decisions },
+      activeBox: d.wasActive ? d.box.id : s.activeBox,
+      deletedBox: null,
+    };
+  });
+}
+
+export function clearDeletedBox() {
+  update(() => ({ deletedBox: null }));
 }
 
 export function setActiveBox(id: string) {

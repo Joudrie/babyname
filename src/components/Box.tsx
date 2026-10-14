@@ -4,6 +4,8 @@ import {
   addBox,
   addToBox,
   boxesOf,
+  clearDeletedBox,
+  undoDeleteBox,
   deleteBox,
   dismissNudge,
   moveToBox,
@@ -64,6 +66,8 @@ export function BoxesPage({ state, onOpenBox, onCompare }: { state: State; onOpe
         + New box
       </button>
 
+      {state.deletedBox && Date.now() - state.deletedBox.t < 8000 && <DeletedToast name={state.deletedBox.box.name} />}
+
       <ul className="row-list row-list--spaced">
         <li>
           <button className="row-link" onClick={onCompare}>
@@ -75,6 +79,20 @@ export function BoxesPage({ state, onOpenBox, onCompare }: { state: State; onOpe
           </button>
         </li>
       </ul>
+    </div>
+  );
+}
+
+/** "Deleted Box 2 — Undo" after deleting a box, for a few seconds. */
+function DeletedToast({ name }: { name: string }) {
+  useEffect(() => {
+    const t = window.setTimeout(clearDeletedBox, 8000);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className="toast" role="status">
+      <span>Deleted {name}</span>
+      <button onClick={undoDeleteBox}>Undo</button>
     </div>
   );
 }
@@ -301,7 +319,7 @@ export function BoxPage({ state, boxId, onOpenName, onGone }: { state: State; bo
           <button
             className="inline-link inline-link--danger"
             onClick={() => {
-              if (confirm(`Delete "${box.name}"? Names that are only in this box go back into your deck.`)) deleteBox(boxId);
+              deleteBox(boxId);
             }}
           >
             Delete box

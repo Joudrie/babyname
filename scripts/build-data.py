@@ -15,6 +15,7 @@ Usage: python3 scripts/build-data.py <dir with the two .sqlite files> [intl dir]
 import json, math, re, sqlite3, sys, collections, os
 sys.path.insert(0, os.path.dirname(__file__))
 from fiction import FICTION
+from asian_names import ROWS as ASIAN_ROWS
 
 SRC = sys.argv[1]
 INTL = sys.argv[2] if len(sys.argv) > 2 else None
@@ -197,9 +198,9 @@ def main():
     if INTL:
         countries = merge_intl(entries, details)
     wikt = os.path.join(INTL or SRC, 'wiktionary.json')
-    confirmed_keys = {}
-    if os.path.exists(wikt):
-        confirmed_keys = merge_wiktionary(entries, wikt)
+    rows = json.load(open(wikt))['names'] if os.path.exists(wikt) else []
+    # The hand-picked Chinese and Korean names (scripts/asian_names.py) go in the same way.
+    confirmed_keys = merge_wiktionary(entries, rows + [list(r) for r in ASIAN_ROWS])
 
     index = {e['key']: i for i, e in enumerate(entries)}
 
@@ -488,9 +489,9 @@ WIKT_ORIGIN = {
 }
 
 
-def merge_wiktionary(entries, path):
-    """Adds Wiktionary's given names (Yoruba, Turkish, Hindi...) and fills origins/meanings the US data lacks."""
-    rows = json.load(open(path))['names']
+def merge_wiktionary(entries, rows):
+    """Adds dictionary names (Wiktionary's Yoruba, Turkish, Hindi...; the curated Chinese/Korean list) and
+    fills origins/meanings the US data lacks. Returns {origin: [keys]} of names confirmed for each origin."""
     by_fold = {}
     for e in entries:
         by_fold.setdefault(fold(e['name']), e)

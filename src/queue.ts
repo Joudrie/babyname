@@ -20,7 +20,7 @@ export function deckMembers(c: Catalog, s: State, id: string): number[] {
 /** Gender and first-letter filters, shared by the deck, the counters and the deck picker. */
 export function makeFilter(c: Catalog, s: State) {
   const { genders, letters } = s.settings;
-  return (i: number) => genders[c.gender[i]] && (letters === '' || letters.includes(c.names[i][0].toUpperCase()));
+  return (i: number) => genders[c.gender[i]] && (letters === '' || letters.includes(c.initial[i]));
 }
 
 /**

@@ -74,6 +74,8 @@ export interface DeckDef {
 
 export interface Catalog {
   names: string[];
+  /** First letter without accents (Özlem -> O), for the "starts with" filter. */
+  initial: string[];
   gender: Gender[];
   /** Origin keys per name, primary origin first. */
   origins: string[][];
@@ -121,6 +123,7 @@ export async function loadCatalog(): Promise<Catalog> {
   const raw: RawCore = await fetch(`${BASE}names.json`).then((r) => r.json());
   const n = raw.names.length;
   const names: string[] = new Array(n);
+  const initial: string[] = new Array(n);
   const gender: Gender[] = new Array(n);
   const origins: string[][] = new Array(n);
   const peak = new Int8Array(n);
@@ -132,6 +135,7 @@ export async function loadCatalog(): Promise<Catalog> {
   for (let i = 0; i < n; i++) {
     const [name, g, o, pk, pp] = raw.names[i].split('|');
     names[i] = name;
+    initial[i] = name.normalize('NFD').replace(/\p{M}/gu, '').charAt(0).toUpperCase();
     gender[i] = g as Gender;
     origins[i] = o ? o.split('.').map((x) => raw.origins[+x]) : [];
     peak[i] = pk === '' ? -1 : +pk;
@@ -194,6 +198,7 @@ export async function loadCatalog(): Promise<Catalog> {
 
   catalog = {
     names,
+    initial,
     gender,
     origins,
     peak,
