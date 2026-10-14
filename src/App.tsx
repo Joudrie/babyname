@@ -10,13 +10,17 @@ import { BoxPanel, ComparePanel, NameActions } from './components/Box';
 import { DeckPicker } from './components/DeckPicker';
 import { ListView } from './components/ListView';
 import { Tutorial } from './components/Tutorial';
-import { BoxIcon, CardsIcon, ClockIcon, GearIcon, GlobeIcon, HeartIcon, ListIcon, MaybeIcon, UndoIcon, XIcon } from './components/icons';
+import { BackIcon, BoxIcon, CardsIcon, ClockIcon, GearIcon, GlobeIcon, HeartIcon, ListIcon, MaybeIcon, UndoIcon, XIcon } from './components/icons';
 import { APP_NAME } from './config';
 
 const DIR_ACTION: Record<Dir, Action> = { right: 'yes', left: 'no', up: 'maybe' };
 const ACTION_DIR: Record<Action, Dir> = { yes: 'right', no: 'left', maybe: 'up' };
 
-type Panel = 'box' | 'history' | 'settings' | 'decks' | 'compare' | null;
+type Panel = 'history' | 'settings' | 'decks' | null;
+/** Full pages (not pop-ups). They live in the URL hash so the phone's back gesture works. */
+type Page = 'home' | 'box' | 'compare';
+
+const readPage = (): Page => (window.location.hash === '#box' ? 'box' : window.location.hash === '#compare' ? 'compare' : 'home');
 
 export default function App() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -54,17 +58,28 @@ function Main() {
   const [incoming, setIncoming] = useState<Partner | null>(() => readPartnerHash(window.location.hash));
   const [mode, setMode] = useState<'swipe' | 'list'>('swipe');
   const [bump, setBump] = useState(0);
+  const [page, setPage] = useState<Page>(readPage);
   const deck = useRef<DeckHandle>(null);
 
-  // Changing decks or filters rebuilds the pile from everything not yet sorted. Waiting for the
-  // decks sheet to close means flipping several switches doesn't reshuffle under your thumb.
+  useEffect(() => {
+    const onHash = () => setPage(readPage());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const openPage = useCallback((p: Page) => {
+    if (p === 'home') {
+      if (readPage() !== 'home') history.back();
+    } else window.location.hash = p;
+  }, []);
+
+  // Changing decks or filters rebuilds the pile right away from everything not yet sorted.
   const mixKey = `${decks.join(',')}|${genders.m}${genders.f}${genders.u}|${letters}|${order}`;
   const builtFor = useRef(mixKey);
   useEffect(() => {
-    if (panel === 'decks' || builtFor.current === mixKey) return;
+    if (builtFor.current === mixKey) return;
     builtFor.current = mixKey;
     setQueue(buildQueue(c, getState()));
-  }, [mixKey, panel, c]);
+  }, [mixKey, c]);
 
   // After "start over" the decisions are empty again, so refill the deck.
   const historyEmpty = state.history.length === 0 && Object.keys(state.decisions).length === 0;
@@ -115,7 +130,7 @@ function Main() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (panel || openName || !getState().tutorialDone || mode !== 'swipe') return;
+      if (panel || openName || page !== 'home' || !getState().tutorialDone || mode !== 'swipe') return;
       if ((e.target as HTMLElement).closest('input, select, textarea')) return;
       if (e.key === 'ArrowRight') deck.current?.swipe('right');
       else if (e.key === 'ArrowLeft') deck.current?.swipe('left');
@@ -126,7 +141,7 @@ function Main() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [panel, openName, mode, onUndo]);
+  }, [panel, openName, page, mode, onUndo]);
 
   const mix = useMemo(() => mixSet(c, getState()), [c, mixKey, state.partner]); // eslint-disable-line react-hooks/exhaustive-deps
   const progress = useMemo(() => mixProgress(c, state, mix), [c, state.decisions, mix]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -136,84 +151,103 @@ function Main() {
 
   return (
     <div className={`app theme-${theme}`}>
-      <header className="topbar">
-        <div className="topbar-side">
-          <button className="icon-btn icon-btn--accent" onClick={() => setPanel('decks')} aria-label="Choose decks">
-            <GlobeIcon size={22} />
-          </button>
-          <button className="icon-btn" onClick={() => setPanel('settings')} aria-label="Settings">
-            <GearIcon size={22} />
-          </button>
-        </div>
-        <div className="brand">
-          <span className="brand-name">{APP_NAME}</span>
-          <span className="counter">
-            {progress.sorted.toLocaleString()} / {progress.total.toLocaleString()}
-          </span>
-        </div>
-        <div className="topbar-side topbar-side--right">
-          <button className="icon-btn" onClick={() => setMode(mode === 'swipe' ? 'list' : 'swipe')} aria-label={mode === 'swipe' ? 'Show as a list' : 'Show as cards'}>
-            {mode === 'swipe' ? <ListIcon size={22} /> : <CardsIcon size={22} />}
-          </button>
-          <button className="icon-btn" onClick={() => setPanel('history')} aria-label="Name history">
-            <ClockIcon size={22} />
-          </button>
-        </div>
-      </header>
+      {page === 'home' ? (
+        <>
+          <header className="topbar">
+            <div className="topbar-side">
+              <button className="icon-btn icon-btn--accent" onClick={() => setPanel('decks')}>
+                <GlobeIcon size={22} />
+                <span>Names</span>
+              </button>
+              <button className="icon-btn" onClick={() => setPanel('settings')}>
+                <GearIcon size={22} />
+                <span>Settings</span>
+              </button>
+            </div>
+            <div className="brand">
+              <span className="brand-name">{APP_NAME}</span>
+              <span className="counter">
+                {progress.sorted.toLocaleString()} / {progress.total.toLocaleString()}
+              </span>
+            </div>
+            <div className="topbar-side topbar-side--right">
+              <button className="icon-btn" onClick={() => setMode(mode === 'swipe' ? 'list' : 'swipe')}>
+                {mode === 'swipe' ? <ListIcon size={22} /> : <CardsIcon size={22} />}
+                <span>{mode === 'swipe' ? 'List' : 'Cards'}</span>
+              </button>
+              <button className="icon-btn" onClick={() => setPanel('history')}>
+                <ClockIcon size={22} />
+                <span>History</span>
+              </button>
+            </div>
+          </header>
 
-      {state.saveFailed && <div className="save-warning">⚠️ Not saving: your browser is blocking storage</div>}
+          {state.saveFailed && <div className="save-warning">⚠️ Not saving: your browser is blocking storage</div>}
 
-      <main className={`stage stage--${mode}`}>
-        {mode === 'swipe' ? (
-          <Deck ref={deck} queue={queue} onSwipe={onSwipe} returning={returning} lastName={lastName.trim()} />
-        ) : (
-          <ListView queue={queue} onDecide={onListDecide} onOpenName={setOpenName} />
-        )}
-      </main>
+          <main className={`stage stage--${mode}`}>
+            {mode === 'swipe' ? (
+              <Deck ref={deck} queue={queue} onSwipe={onSwipe} returning={returning} lastName={lastName.trim()} />
+            ) : (
+              <ListView queue={queue} onDecide={onListDecide} onOpenName={setOpenName} />
+            )}
+          </main>
 
-      <nav className="controls">
-        <button className="ctl ctl--sm" onClick={onUndo} disabled={!state.history.length} aria-label="Undo last swipe">
-          <UndoIcon size={20} />
-        </button>
-        {mode === 'swipe' && (
-          <>
-            <button className="ctl ctl--lg ctl--nope" onClick={() => deck.current?.swipe('left')} disabled={!queue.length} aria-label="Pass">
-              <XIcon size={30} />
+          <nav className="controls">
+            <button className="ctl ctl--sm" onClick={onUndo} disabled={!state.history.length} aria-label="Undo last swipe">
+              <UndoIcon size={20} />
             </button>
-            <button className="ctl ctl--md ctl--maybe" onClick={() => deck.current?.swipe('up')} disabled={!queue.length} aria-label="Not sure">
-              <MaybeIcon size={24} />
+            {mode === 'swipe' && (
+              <>
+                <button className="ctl ctl--lg ctl--nope" onClick={() => deck.current?.swipe('left')} disabled={!queue.length} aria-label="Pass">
+                  <XIcon size={30} />
+                </button>
+                <button className="ctl ctl--md ctl--maybe" onClick={() => deck.current?.swipe('up')} disabled={!queue.length} aria-label="Not sure">
+                  <MaybeIcon size={24} />
+                </button>
+                <button className="ctl ctl--lg ctl--like" onClick={() => deck.current?.swipe('right')} disabled={!queue.length} aria-label="Keep">
+                  <HeartIcon size={30} />
+                </button>
+              </>
+            )}
+            <button className="ctl ctl--sm ctl--box" onClick={() => openPage('box')} aria-label={`My names, ${boxCount}`}>
+              <BoxIcon size={20} />
+              {boxCount > 0 && (
+                <span className="badge" key={bump}>
+                  {boxCount}
+                </span>
+              )}
             </button>
-            <button className="ctl ctl--lg ctl--like" onClick={() => deck.current?.swipe('right')} disabled={!queue.length} aria-label="Keep">
-              <HeartIcon size={30} />
+          </nav>
+        </>
+      ) : (
+        <div className="page">
+          <header className="page-head">
+            <button className="icon-btn page-back" onClick={() => openPage('home')} aria-label="Back">
+              <BackIcon size={24} />
             </button>
-          </>
-        )}
-        <button className="ctl ctl--sm ctl--box" onClick={() => setPanel('box')} aria-label={`Your box, ${boxCount} names`}>
-          <BoxIcon size={20} />
-          {boxCount > 0 && (
-            <span className="badge" key={bump}>
-              {boxCount}
-            </span>
-          )}
-        </button>
-      </nav>
+            <h1>{page === 'box' ? 'My names' : state.partner ? `You & ${state.partner.name || 'your partner'}` : 'Compare with your partner'}</h1>
+          </header>
+          <div className="page-body">
+            {page === 'box' ? (
+              <BoxPanel state={state} onOpenName={setOpenName} onCompare={() => openPage('compare')} />
+            ) : (
+              <ComparePanel
+                state={state}
+                onOpenName={setOpenName}
+                onSwipePartner={() => {
+                  if (!decks.includes('partner')) updateSettings({ decks: [...decks, 'partner'] });
+                  setMode('swipe');
+                  history.replaceState(null, '', window.location.pathname + window.location.search);
+                  setPage('home');
+                }}
+              />
+            )}
+          </div>
+        </div>
+      )}
 
-      <Sheet open={panel === 'decks'} onClose={close} title="🌍 Decks">
+      <Sheet open={panel === 'decks'} onClose={close} title="Choose your names">
         <DeckPicker state={state} />
-      </Sheet>
-      <Sheet open={panel === 'box'} onClose={close} title="Your box">
-        <BoxPanel state={state} onOpenName={setOpenName} onCompare={() => setPanel('compare')} />
-      </Sheet>
-      <Sheet open={panel === 'compare'} onClose={close} title={state.partner ? `You & ${state.partner.name || 'your partner'}` : 'Compare with your partner'}>
-        <ComparePanel
-          state={state}
-          onOpenName={setOpenName}
-          onSwipePartner={() => {
-            if (!decks.includes('partner')) updateSettings({ decks: [...decks, 'partner'] });
-            setMode('swipe');
-            setPanel(null);
-          }}
-        />
       </Sheet>
       <Sheet open={panel === 'history'} onClose={close} title={`History · ${state.history.length}`}>
         <HistoryPanel state={state} onOpenName={setOpenName} />
@@ -245,7 +279,7 @@ function Main() {
               onClick={() => {
                 setPartner(incoming);
                 setIncoming(null);
-                setPanel('compare');
+                openPage('compare');
               }}
             >
               Compare our names

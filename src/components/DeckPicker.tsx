@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { GROUPS, getCatalog, type Gender } from '../data/catalog';
 import { DEFAULT_DECKS, updateSettings, type State } from '../store';
 import { deckCount } from '../queue';
@@ -9,8 +9,13 @@ const GENDERS: { key: Gender; label: string }[] = [
   { key: 'f', label: 'Girls' },
   { key: 'u', label: 'Unisex' },
 ];
+/** The few decks shown up front; everything else sits one tap deeper so the screen stays calm. */
+const START_HERE = ['popular', 'classics', 'trending', 'oldfashioned'];
+const THEMES = ['origin:fiction', 'origin:myth', 'origin:biblical', 'everything'];
 
-function DeckChip({ id, label, state, counts }: { id: string; label: string; state: State; counts: Map<string, { left: number; total: number }> }) {
+type Counts = Map<string, { left: number; total: number }>;
+
+function DeckChip({ id, label, state, counts }: { id: string; label: string; state: State; counts: Counts }) {
   const on = state.settings.decks.includes(id);
   const count = counts.get(id);
   const onlyOne = on && state.settings.decks.length === 1;
@@ -20,14 +25,27 @@ function DeckChip({ id, label, state, counts }: { id: string; label: string; sta
       aria-pressed={on}
       disabled={onlyOne}
       title={onlyOne ? 'Keep at least one deck on' : undefined}
-      onClick={() => {
-        const decks = on ? state.settings.decks.filter((d) => d !== id) : [...state.settings.decks, id];
-        updateSettings({ decks });
-      }}
+      onClick={() => updateSettings({ decks: on ? state.settings.decks.filter((d) => d !== id) : [...state.settings.decks, id] })}
     >
+      <span className="deck-chip-check" aria-hidden="true">
+        {on ? '✓' : ''}
+      </span>
       <span className="deck-chip-label">{label}</span>
-      {count && <span className="deck-chip-count">{count.left === count.total ? count.total : `${count.left} left`}</span>}
+      {count && <span className="deck-chip-count">{count.left.toLocaleString()}</span>}
     </button>
+  );
+}
+
+/** A tappable row that opens to show its options, with a short summary of what's chosen inside. */
+function Section({ title, summary, children, open }: { title: string; summary?: string; children: ReactNode; open?: boolean }) {
+  return (
+    <details className="picker-row" open={open}>
+      <summary>
+        <span className="picker-row-title">{title}</span>
+        {summary && <span className="picker-row-summary">{summary}</span>}
+      </summary>
+      <div className="picker-row-body">{children}</div>
+    </details>
   );
 }
 
@@ -37,18 +55,29 @@ export function DeckPicker({ state }: { state: State }) {
   const [loadingYear, setLoadingYear] = useState(false);
   const onCount = Object.values(genders).filter(Boolean).length;
 
-  // Counts depend on what's been sorted and the filters; recomputed when any of those change.
   const counts = useMemo(() => {
-    const m = new Map<string, { left: number; total: number }>();
+    const m: Counts = new Map();
     for (const d of c.decks) m.set(d.id, deckCount(c, state, d.id));
     for (const id of decks) if (!m.has(id)) m.set(id, deckCount(c, state, id));
     if (state.partner) m.set('partner', deckCount(c, state, 'partner'));
     return m;
   }, [c, state.decisions, genders, letters, decks, state.partner]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const featured = c.decks.filter((d) => d.group === 'featured');
-  const eras = c.decks.filter((d) => d.group === 'eras');
+  const byId = new Map(c.decks.map((d) => [d.id, d]));
+  const onIn = (ids: string[]) => ids.filter((id) => decks.includes(id)).length;
+  const onSummary = (n: number) => (n ? `${n} on` : '');
+  const chips = (ids: string[]) => (
+    <div className="deck-grid">
+      {ids.map((id) => (
+        <DeckChip key={id} id={id} label={byId.get(id)?.label ?? id} state={state} counts={counts} />
+      ))}
+    </div>
+  );
+
+  const countries = c.decks.filter((d) => d.group === 'world').map((d) => d.id);
+  const eras = c.decks.filter((d) => d.group === 'eras').map((d) => d.id);
   const yearDecks = decks.filter((d) => d.startsWith('year:'));
+  const regionIds = GROUPS.filter((g) => g.key !== 'world').flatMap((g) => c.decks.filter((d) => d.group === g.key).map((d) => d.id));
 
   async function addYear(year: string) {
     if (!year) return;
@@ -63,8 +92,6 @@ export function DeckPicker({ state }: { state: State }) {
 
   return (
     <div className="picker">
-      <p className="panel-note">Turn on as many decks as you like. A name you've sorted never comes back in another deck.</p>
-
       <section>
         <h3>Show me</h3>
         <div className="chips">
@@ -83,90 +110,76 @@ export function DeckPicker({ state }: { state: State }) {
       </section>
 
       <section>
-        <h3>
-          Starts with
+        <h3>Start here</h3>
+        {chips(START_HERE)}
+      </section>
+
+      <div className="picker-rows">
+        {state.partner && (
+          <Section title={`${state.partner.name || 'Partner'}'s picks`} summary={onSummary(onIn(['partner']))}>
+            <div className="deck-grid">
+              <DeckChip id="partner" label={`${state.partner.name || 'Partner'}'s picks`} state={state} counts={counts} />
+            </div>
+          </Section>
+        )}
+
+        <Section title="Starts with a letter" summary={letters ? letters.split('').join(', ') : 'Any'}>
+          <div className="letters">
+            {LETTERS.map((l) => (
+              <button key={l} className={`letter ${letters.includes(l) ? 'is-on' : ''}`} aria-pressed={letters.includes(l)} onClick={() => toggleLetter(l)}>
+                {l}
+              </button>
+            ))}
+          </div>
           {letters && (
-            <button className="inline-link" onClick={() => updateSettings({ letters: '' })}>
-              any letter
+            <button className="text-btn" onClick={() => updateSettings({ letters: '' })}>
+              Any letter
             </button>
           )}
-        </h3>
-        <div className="letters">
-          {LETTERS.map((l) => (
-            <button key={l} className={`letter ${letters.includes(l) ? 'is-on' : ''}`} aria-pressed={letters.includes(l)} onClick={() => toggleLetter(l)}>
-              {l}
-            </button>
-          ))}
-        </div>
-      </section>
+        </Section>
 
-      {state.partner && (
-        <section>
-          <h3>From your partner</h3>
-          <div className="deck-grid">
-            <DeckChip id="partner" label={`${state.partner.name || 'Partner'}'s picks`} state={state} counts={counts} />
+        <Section title="Popular in other countries" summary={onSummary(onIn(countries))}>
+          {chips(countries)}
+        </Section>
+
+        <Section title="Where names come from" summary={onSummary(onIn(regionIds))}>
+          {GROUPS.filter((g) => g.key !== 'world').map((g) => (
+            <div key={g.key} className="region-block">
+              <h4>{g.label}</h4>
+              {chips(c.decks.filter((d) => d.group === g.key).map((d) => d.id))}
+            </div>
+          ))}
+        </Section>
+
+        <Section title="Themes" summary={onSummary(onIn(THEMES))}>
+          {chips(THEMES)}
+        </Section>
+
+        <Section title="Through the years" summary={onSummary(onIn([...eras, ...yearDecks]))}>
+          <p className="panel-note">The most-given US names of each decade, or the top 100 of one year.</p>
+          {chips(eras)}
+          <div className="year-row">
+            <select defaultValue="" onChange={(e) => addYear(e.target.value)} disabled={loadingYear} aria-label="Add a year">
+              <option value="">{loadingYear ? 'Loading…' : '+ Top names of a year…'}</option>
+              {Array.from({ length: c.yearsRange[1] - c.yearsRange[0] + 1 }, (_, i) => String(c.yearsRange[1] - i)).map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </div>
-        </section>
-      )}
-
-      <section>
-        <h3>Popular picks</h3>
-        <div className="deck-grid">
-          {featured.map((d) => (
-            <DeckChip key={d.id} id={d.id} label={d.label} state={state} counts={counts} />
-          ))}
-        </div>
-      </section>
-
-      {GROUPS.map((g) => {
-        const list = c.decks.filter((d) => d.group === g.key);
-        const active = list.filter((d) => decks.includes(d.id)).length;
-        return (
-          <details key={g.key} className="region" open={g.open || active > 0}>
-            <summary>
-              <span>{g.label}</span>
-              {active > 0 && <span className="region-count">{active} on</span>}
-            </summary>
+          {yearDecks.length > 0 && (
             <div className="deck-grid">
-              {list.map((d) => (
-                <DeckChip key={d.id} id={d.id} label={d.label} state={state} counts={counts} />
+              {yearDecks.map((id) => (
+                <DeckChip key={id} id={id} label={id.slice(5)} state={state} counts={counts} />
               ))}
             </div>
-          </details>
-        );
-      })}
-
-      <details className="region" open={decks.some((d) => d.startsWith('era:') || d.startsWith('year:'))}>
-        <summary>
-          <span>Through the years</span>
-        </summary>
-        <p className="panel-note">The most-given US names of each decade, or the top 100 boys and girls of one year.</p>
-        <div className="deck-grid deck-grid--tight">
-          {eras.map((d) => (
-            <DeckChip key={d.id} id={d.id} label={d.label} state={state} counts={counts} />
-          ))}
-        </div>
-        <div className="year-row">
-          <select defaultValue="" onChange={(e) => addYear(e.target.value)} disabled={loadingYear} aria-label="Add a year">
-            <option value="">{loadingYear ? 'Loading…' : '+ Top names of a year…'}</option>
-            {Array.from({ length: c.yearsRange[1] - c.yearsRange[0] + 1 }, (_, i) => String(c.yearsRange[1] - i)).map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-        {yearDecks.length > 0 && (
-          <div className="deck-grid deck-grid--tight">
-            {yearDecks.map((id) => (
-              <DeckChip key={id} id={id} label={id.slice(5)} state={state} counts={counts} />
-            ))}
-          </div>
-        )}
-      </details>
+          )}
+        </Section>
+      </div>
 
       <button className="text-btn" onClick={() => updateSettings({ decks: DEFAULT_DECKS, letters: '' })}>
-        Back to the starter decks
+        Reset to the starter decks
       </button>
     </div>
   );
