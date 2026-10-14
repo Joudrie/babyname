@@ -87,6 +87,7 @@ export function SettingsPanel({ state, onReplayTutorial }: { state: State; onRep
           : 'Your progress saves on this device automatically. We never send promotional email.'}
       </p>
       <p className="legal-links">
+        <a href="names/">Browse all names</a>
         <a href="#privacy">Privacy policy</a>
         <a href="#terms">Terms of use</a>
       </p>

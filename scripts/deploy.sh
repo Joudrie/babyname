@@ -4,6 +4,8 @@
 set -e
 cd "$(dirname "$0")/.."
 npm run build
+# One page per name for search engines, plus the sitemap.
+python3 scripts/build-pages.py dist
 touch dist/.nojekyll
 rm -rf .deploy && cp -r dist .deploy
 cd .deploy
