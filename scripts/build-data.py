@@ -196,6 +196,9 @@ def main():
     countries = {}
     if INTL:
         countries = merge_intl(entries, details)
+    wikt = os.path.join(INTL or SRC, 'wiktionary.json')
+    if os.path.exists(wikt):
+        merge_wiktionary(entries, wikt)
 
     index = {e['key']: i for i, e in enumerate(entries)}
 
@@ -319,7 +322,7 @@ def shard_of(name):
     return c if 'a' <= c <= 'z' else 'other'
 
 
-COUNTRY_ORIGIN = {'uk': 'english', 'ie': 'irish', 'fr': 'french', 'es': 'spanish', 'no': 'nordic'}
+COUNTRY_ORIGIN = {'uk': 'english', 'sc': 'scottish', 'ie': 'irish', 'fr': 'french', 'es': 'spanish', 'no': 'nordic'}
 
 
 def fold(name):
@@ -362,6 +365,18 @@ def load_intl(d):
                     if isinstance(r[i], int):
                         counts[(str(r[0]).strip(), sex)] += r[i]
         out['uk'] = top(counts, 500)
+
+    # Scotland: NRS full lists (nrs_<year>.xlsx), sheets Boys / Girls with Rank, Name, Number.
+    counts = collections.Counter()
+    for f in sorted(os.listdir(d)):
+        if f.startswith('nrs_') and f.endswith('.xlsx'):
+            wb = openpyxl.load_workbook(os.path.join(d, f), read_only=True)
+            for sheet, sex in (('Boys', 'M'), ('Girls', 'F')):
+                for r in wb[sheet].iter_rows(values_only=True):
+                    if len(r) >= 3 and isinstance(r[1], str) and isinstance(r[2], int):
+                        counts[(r[1].strip(), sex)] += r[2]
+    if counts:
+        out['sc'] = top(counts, 300)
 
     # Ireland: CSO VSA50 (boys) / VSA60 (girls), the "Number" statistic.
     counts = collections.Counter()
@@ -450,6 +465,57 @@ def merge_intl(entries, details):
         decks[country] = {'names': names}
         print(country, len(names), 'names')
     return decks
+
+
+WIKT_ORIGIN = {
+    'Yoruba': 'westafrican', 'Igbo': 'westafrican', 'Hausa': 'westafrican', 'Akan': 'westafrican', 'Twi': 'westafrican', 'Ewe': 'westafrican',
+    'Swahili': 'eastafrican', 'Somali': 'eastafrican', 'Amharic': 'eastafrican', 'Zulu': 'southafrican', 'Xhosa': 'southafrican',
+    'Shona': 'southafrican', 'Turkish': 'turkish', 'Azerbaijani': 'turkish', 'Uzbek': 'turkish', 'Kazakh': 'turkish',
+    'Vietnamese': 'vietnamese', 'Indonesian': 'seasian', 'Malay': 'seasian', 'Thai': 'seasian', 'Tagalog': 'filipino',
+    'Hawaiian': 'polynesian', 'Maori': 'polynesian', 'Samoan': 'polynesian', 'Finnish': 'nordic', 'Swedish': 'nordic',
+    'Norwegian Bokmål': 'nordic', 'Danish': 'nordic', 'Icelandic': 'nordic', 'Polish': 'polish', 'Czech': 'czech', 'Slovak': 'czech',
+    'Hungarian': 'hungarian', 'Romanian': 'balkan', 'Albanian': 'balkan', 'Croatian': 'balkan', 'Slovene': 'balkan',
+    'Lithuanian': 'baltic', 'Latvian': 'baltic', 'Estonian': 'baltic', 'Italian': 'italian', 'Portuguese': 'portuguese',
+    'Spanish': 'spanish', 'Basque': 'spanish', 'Catalan': 'spanish', 'Galician': 'spanish', 'French': 'french', 'Breton': 'welsh',
+    'German': 'german', 'Dutch': 'dutch', 'Irish': 'irish', 'Scottish Gaelic': 'scottish', 'Welsh': 'welsh', 'Arabic': 'arabic',
+    'Hebrew': 'hebrew', 'Persian': 'persian', 'Hindi': 'indian', 'Sanskrit': 'indian', 'Urdu': 'indian', 'Punjabi': 'indian',
+    'Bengali': 'indian', 'Tamil': 'indian', 'Chinese': 'chinese', 'Mandarin': 'chinese', 'Cantonese': 'chinese', 'Japanese': 'japanese',
+    'Korean': 'korean', 'Russian': 'russian', 'Ukrainian': 'russian', 'Greek': 'greek', 'Armenian': 'armenian', 'Georgian': 'armenian',
+    'Navajo': 'native', 'Cherokee': 'native', 'Native American languages': 'native',
+}
+
+
+def merge_wiktionary(entries, path):
+    """Adds Wiktionary's given names (Yoruba, Turkish, Hindi...) and fills origins/meanings the US data lacks."""
+    rows = json.load(open(path))['names']
+    by_fold = {}
+    for e in entries:
+        by_fold.setdefault(fold(e['name']), e)
+    added = tagged = 0
+    for name, lang, g, meaning in rows:
+        origin = WIKT_ORIGIN.get(lang)
+        if not origin:
+            continue
+        f = fold(name)
+        e = by_fold.get(f)
+        if e is None:
+            e = {'key': f, 'name': name, 'g': g, 'total': 0, 'origins': [], 'peak': -1, 'meaning': '', 'pron': '',
+                 'series': [0] * len(DECADES)}
+            entries.append(e)
+            by_fold[f] = e
+            added += 1
+        elif e['g'] != g and not e.get('total') and g in 'mf' and e['g'] in 'mf':
+            e['g'] = 'u'
+        if origin not in e['origins']:
+            # Names the US data only knew as "modern American" get their real origin first.
+            if e['origins'] == ['american']:
+                e['origins'] = [origin]
+            else:
+                e['origins'].append(origin)
+            tagged += 1
+        if meaning and not e['meaning']:
+            e['meaning'] = f'{lang}: {meaning}'
+    print(f'wiktionary: {added} new names, {tagged} origin tags added')
 
 
 if __name__ == '__main__':

@@ -53,7 +53,7 @@ export const ORIGIN_META: Record<string, OriginMeta> = {
   vietnamese: { label: 'Vietnamese', group: 'asia' },
   filipino: { label: 'Filipino', group: 'asia' },
   seasian: { label: 'Southeast Asian', group: 'asia' },
-  westafrican: { label: 'West African', group: 'africa' },
+  westafrican: { label: 'West African (Nigerian, Ghanaian…)', group: 'africa' },
   eastafrican: { label: 'East African', group: 'africa' },
   southafrican: { label: 'Southern African', group: 'africa' },
   african: { label: 'African', group: 'africa' },
@@ -101,6 +101,7 @@ interface RawCore {
 /** Recent most-given names from each country's official statistics. */
 const COUNTRIES: Record<string, { label: string; hint: string }> = {
   uk: { label: 'England & Wales', hint: 'ONS, 2016–2025' },
+  sc: { label: 'Scotland', hint: 'NRS, 2024–2025' },
   ie: { label: 'Ireland', hint: 'CSO, 2015–2024' },
   fr: { label: 'France', hint: 'INSEE, 2012–2021' },
   es: { label: 'Spain', hint: 'INE, top names by decade' },

@@ -18,11 +18,11 @@ ORIGIN_LABEL = {
     'balkan': 'Balkan & Romanian', 'slavic': 'Slavic', 'hungarian': 'Hungarian', 'baltic': 'Baltic', 'hebrew': 'Hebrew', 'arabic': 'Arabic',
     'persian': 'Persian', 'turkish': 'Turkish & Central Asian', 'armenian': 'Armenian & Georgian', 'indian': 'Indian & South Asian',
     'chinese': 'Chinese', 'japanese': 'Japanese', 'korean': 'Korean', 'vietnamese': 'Vietnamese', 'filipino': 'Filipino',
-    'seasian': 'Southeast Asian', 'westafrican': 'West African', 'eastafrican': 'East African', 'southafrican': 'Southern African',
+    'seasian': 'Southeast Asian', 'westafrican': 'West African (Nigerian, Ghanaian)', 'eastafrican': 'East African', 'southafrican': 'Southern African',
     'african': 'African', 'american': 'Modern American', 'native': 'Native American', 'polynesian': 'Hawaiian & Polynesian',
     'fiction': 'Books, film & TV', 'myth': 'Mythology', 'biblical': 'Biblical',
 }
-COUNTRY_LABEL = {'uk': 'England & Wales', 'ie': 'Ireland', 'fr': 'France', 'es': 'Spain', 'no': 'Norway'}
+COUNTRY_LABEL = {'uk': 'England & Wales', 'sc': 'Scotland', 'ie': 'Ireland', 'fr': 'France', 'es': 'Spain', 'no': 'Norway'}
 GENDER = {'m': 'boy', 'f': 'girl', 'u': 'unisex'}
 
 CSS = """*{box-sizing:border-box}body{margin:0;font-family:Nunito,system-ui,sans-serif;color:#33403a;background:#e4f1e1;-webkit-font-smoothing:antialiased}
