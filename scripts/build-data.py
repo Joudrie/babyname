@@ -15,7 +15,7 @@ Usage: python3 scripts/build-data.py <dir with the two .sqlite files> [intl dir]
 import json, math, re, sqlite3, sys, collections, os
 sys.path.insert(0, os.path.dirname(__file__))
 from fiction import FICTION
-from asian_names import ROWS as ASIAN_ROWS
+from curated_names import ROWS as CURATED_ROWS
 
 SRC = sys.argv[1]
 INTL = sys.argv[2] if len(sys.argv) > 2 else None
@@ -199,8 +199,8 @@ def main():
         countries = merge_intl(entries, details)
     wikt = os.path.join(INTL or SRC, 'wiktionary.json')
     rows = json.load(open(wikt))['names'] if os.path.exists(wikt) else []
-    # The hand-picked Chinese and Korean names (scripts/asian_names.py) go in the same way.
-    confirmed_keys = merge_wiktionary(entries, rows + [list(r) for r in ASIAN_ROWS])
+    # The hand-picked Chinese, Korean and Igbo names (scripts/curated_names.py) go in the same way.
+    confirmed_keys = merge_wiktionary(entries, rows + [list(r) for r in CURATED_ROWS])
 
     index = {e['key']: i for i, e in enumerate(entries)}
 

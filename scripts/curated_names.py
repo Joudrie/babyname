@@ -1,4 +1,5 @@
-# Hand-picked Chinese (pinyin, tone marks dropped) and Korean (Revised Romanization) given names.
+# Hand-picked names for traditions the open datasets barely cover: Chinese (pinyin, tone marks dropped),
+# Korean (Revised Romanization) and Igbo (Nigeria), whose names are usually short sentences about God or family.
 # Chinese meanings are the usual sense of the characters. Most Korean names take their meaning from
 # whichever hanja a family picks, so only native Korean names (Haneul, Byeol...) carry a meaning here.
 # (name, gender m/f/u, language, meaning)
@@ -39,4 +40,21 @@ KOREAN = [
     ('Seulgi', 'f', 'wisdom'), ('Yeseul', 'f', 'dew'), ('Bit-na', 'f', 'shining'), ('Garam', 'm', 'river'), ('Han-gyeol', 'm', 'steadfast'),
 ]
 
-ROWS = [(n, 'Chinese', g, m) for n, g, m in CHINESE] + [(n, 'Korean', g, m) for n, g, m in KOREAN]
+IGBO = [
+    ('Chinedu', 'm', 'God leads'), ('Chiamaka', 'f', 'God is beautiful'), ('Obinna', 'm', "father's heart"), ('Ngozi', 'f', 'blessing'),
+    ('Adaeze', 'f', 'princess, daughter of a king'), ('Chidi', 'm', 'God exists'), ('Nnamdi', 'm', 'my father is alive'),
+    ('Uchenna', 'u', "God's will"), ('Ifeoma', 'f', 'a good thing'), ('Amaka', 'f', 'beautiful'), ('Ebuka', 'm', 'God is great'),
+    ('Kelechi', 'u', 'thank God'), ('Nkechi', 'f', "God's own"), ('Chioma', 'f', 'good God'), ('Ikenna', 'm', "father's strength"),
+    ('Chukwuemeka', 'm', 'God has done great things'), ('Emeka', 'm', 'great deeds'), ('Oluchi', 'f', "God's work"),
+    ('Adanna', 'f', "her father's daughter"), ('Nneka', 'f', 'mother is supreme'), ('Ugo', 'u', 'eagle; glory'),
+    ('Chibuike', 'm', 'God is my strength'), ('Ifeanyi', 'm', 'nothing is impossible for God'), ('Kosisochukwu', 'u', 'as it pleases God'),
+    ('Chimamanda', 'f', 'my God will not fail'), ('Ebere', 'f', 'mercy'), ('Ada', 'f', 'first daughter'), ('Obioma', 'u', 'kind heart'),
+    ('Tobenna', 'm', 'praise the father'), ('Chisom', 'u', 'God is with me'), ('Nkem', 'u', 'my own'), ('Chinwe', 'f', 'God owns'),
+    ('Chinonso', 'u', 'God is near'), ('Akachi', 'u', 'hand of God'), ('Chidera', 'u', 'what God has written'),
+    ('Amarachi', 'f', "God's grace"), ('Ugochi', 'f', "God's glory"), ('Chukwudi', 'm', 'God exists'), ('Somtochukwu', 'u', 'praise God with me'),
+    ('Ozioma', 'f', 'good news'), ('Udoka', 'u', 'peace is greater'), ('Nnaemeka', 'm', 'the father has done great things'),
+    ('Obiora', 'm', 'heart of the people'), ('Chiedza', 'f', 'light'), ('Onyinye', 'f', 'gift'), ('Uzoma', 'u', 'good road, good path'),
+]
+
+ROWS = ([(n, 'Chinese', g, m) for n, g, m in CHINESE] + [(n, 'Korean', g, m) for n, g, m in KOREAN]
+        + [(n, 'Igbo', g, m) for n, g, m in IGBO])
