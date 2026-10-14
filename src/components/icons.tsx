@@ -50,3 +50,23 @@ export const ClockIcon = ({ size }: { size?: number }) => (
     <path d="M12 7.5V12l3 2" />
   </Svg>
 );
+
+export const GlobeIcon = ({ size }: { size?: number }) => (
+  <Svg size={size}>
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M3.5 12h17M12 3.5c2.5 2.6 3.6 5.4 3.6 8.5s-1.1 5.9-3.6 8.5c-2.5-2.6-3.6-5.4-3.6-8.5S9.5 6.1 12 3.5z" />
+  </Svg>
+);
+
+export const ListIcon = ({ size }: { size?: number }) => (
+  <Svg size={size}>
+    <path d="M8 6.5h12M8 12h12M8 17.5h12M4 6.5h.01M4 12h.01M4 17.5h.01" />
+  </Svg>
+);
+
+export const CardsIcon = ({ size }: { size?: number }) => (
+  <Svg size={size}>
+    <rect x="6" y="3.5" width="12" height="17" rx="2.5" />
+    <path d="M3 7v10M21 7v10" />
+  </Svg>
+);

@@ -1,24 +1,56 @@
 import { useSyncExternalStore } from 'react';
-import type { Gender } from './data/names';
+import type { Gender } from './data/catalog';
 
 export type Decision = 'yes' | 'no';
 export type Action = Decision | 'maybe';
 export type Theme = 'color' | 'neutral';
+export type Order = 'popular' | 'random';
+/** 0 = not ranked yet, 1 = love it, 2 = really like, 3 = thinking about it. */
+export type Tier = 0 | 1 | 2 | 3;
 
 export interface HistoryItem {
   name: string;
   action: Action;
+  t: number;
+  /** The box a "yes" went into, so undo takes it back out of the right one. */
+  box?: string;
+}
+
+export interface Box {
+  id: string;
+  name: string;
+}
+
+export interface BoxEntry {
+  tier: Tier;
+  t: number;
+}
+
+export interface Partner {
+  name: string;
+  picks: [string, Tier][];
   t: number;
 }
 
 export interface Settings {
   theme: Theme;
   genders: Record<Gender, boolean>;
+  decks: string[];
+  /** Only show names starting with one of these letters ('' = any). */
+  letters: string;
+  order: Order;
+  lastName: string;
+  myName: string;
 }
 
 export interface State {
   decisions: Record<string, Decision>;
   history: HistoryItem[];
+  boxes: Box[];
+  activeBox: string;
+  entries: Record<string, Record<string, BoxEntry>>;
+  partner: Partner | null;
+  dismissedNudges: string[];
   settings: Settings;
   tutorialDone: boolean;
   /** True when the browser refused our last save, so the UI can say so instead of silently losing swipes. */
@@ -27,10 +59,37 @@ export interface State {
 
 const KEY = 'cradle:v1';
 
+export const DEFAULT_DECKS = [
+  'popular',
+  'classics',
+  'origin:english',
+  'origin:irish',
+  'origin:scottish',
+  'origin:welsh',
+  'origin:french',
+  'origin:german',
+  'origin:dutch',
+  'origin:spanish',
+  'origin:italian',
+];
+
 const DEFAULTS: State = {
   decisions: {},
   history: [],
-  settings: { theme: 'color', genders: { m: true, f: true, u: true } },
+  boxes: [{ id: 'b1', name: 'My names' }],
+  activeBox: 'b1',
+  entries: { b1: {} },
+  partner: null,
+  dismissedNudges: [],
+  settings: {
+    theme: 'color',
+    genders: { m: true, f: true, u: true },
+    decks: DEFAULT_DECKS,
+    letters: '',
+    order: 'popular',
+    lastName: '',
+    myName: '',
+  },
   tutorialDone: false,
   saveFailed: false,
 };
@@ -40,12 +99,19 @@ function load(): State {
     const raw = localStorage.getItem(KEY);
     if (!raw) return DEFAULTS;
     const saved = JSON.parse(raw);
-    return {
+    const s: State = {
       ...DEFAULTS,
       ...saved,
       settings: { ...DEFAULTS.settings, ...saved.settings, genders: { ...DEFAULTS.settings.genders, ...saved.settings?.genders } },
       saveFailed: false,
     };
+    // Saves from before boxes existed: every liked name goes into the first box.
+    if (!saved.entries) {
+      const t = Date.now();
+      s.entries = { b1: Object.fromEntries(Object.entries(s.decisions).filter(([, d]) => d === 'yes').map(([n]) => [n, { tier: 0 as Tier, t }])) };
+    }
+    if (!s.boxes.some((b) => b.id === s.activeBox)) s.activeBox = s.boxes[0].id;
+    return s;
   } catch {
     return DEFAULTS;
   }
@@ -62,10 +128,10 @@ function flush() {
     clearTimeout(saveTimer);
     saveTimer = undefined;
   }
-  const { decisions, history, settings, tutorialDone } = state;
+  const { saveFailed: _, ...persisted } = state;
   let failed = false;
   try {
-    localStorage.setItem(KEY, JSON.stringify({ decisions, history, settings, tutorialDone }));
+    localStorage.setItem(KEY, JSON.stringify(persisted));
   } catch {
     failed = true;
   }
@@ -104,10 +170,23 @@ export function useStore(): State {
 
 export const getState = () => state;
 
+/** Every box a name sits in. */
+export function boxesOf(s: State, name: string): string[] {
+  return s.boxes.filter((b) => s.entries[b.id]?.[name]).map((b) => b.id);
+}
+
+function withEntry(s: State, box: string, name: string, entry: BoxEntry | null) {
+  const current = { ...(s.entries[box] ?? {}) };
+  if (entry) current[name] = entry;
+  else delete current[name];
+  return { ...s.entries, [box]: current };
+}
+
 export function decide(name: string, action: Action) {
   update((s) => ({
     decisions: action === 'maybe' ? s.decisions : { ...s.decisions, [name]: action },
-    history: [...s.history, { name, action, t: Date.now() }],
+    entries: action === 'yes' ? withEntry(s, s.activeBox, name, { tier: 0, t: Date.now() }) : s.entries,
+    history: [...s.history, { name, action, t: Date.now(), box: action === 'yes' ? s.activeBox : undefined }],
   }));
 }
 
@@ -118,14 +197,90 @@ export function undo(): HistoryItem | null {
   update((s) => {
     const decisions = { ...s.decisions };
     if (last.action !== 'maybe') delete decisions[last.name];
-    return { decisions, history: s.history.slice(0, -1) };
+    return {
+      decisions,
+      entries: last.action === 'yes' && last.box ? withEntry(s, last.box, last.name, null) : s.entries,
+      history: s.history.slice(0, -1),
+    };
   });
   return last;
 }
 
-/** Changes a name's decision after the fact (from history or the box) without adding a history row. */
+/** Changes a name's decision after the fact (from history or a list) without adding a history row. */
 export function setDecision(name: string, decision: Decision) {
-  update((s) => ({ decisions: { ...s.decisions, [name]: decision } }));
+  update((s) => {
+    let entries = s.entries;
+    if (decision === 'yes' && boxesOf(s, name).length === 0) entries = withEntry(s, s.activeBox, name, { tier: 0, t: Date.now() });
+    if (decision === 'no') for (const b of boxesOf(s, name)) entries = withEntry({ ...s, entries }, b, name, null);
+    return { decisions: { ...s.decisions, [name]: decision }, entries };
+  });
+}
+
+/** Puts a name into a box (from variants or a partner's list), counting it as liked. */
+export function addToBox(name: string, box = state.activeBox) {
+  update((s) => ({
+    decisions: { ...s.decisions, [name]: 'yes' },
+    entries: s.entries[box]?.[name] ? s.entries : withEntry(s, box, name, { tier: 0, t: Date.now() }),
+  }));
+}
+
+export function setTier(box: string, name: string, tier: Tier) {
+  update((s) => {
+    const e = s.entries[box]?.[name];
+    return e ? { entries: withEntry(s, box, name, { ...e, tier }) } : {};
+  });
+}
+
+/** Takes a name out of a box. If it's in no box any more it counts as passed. */
+export function removeFromBox(box: string, name: string) {
+  update((s) => {
+    const entries = withEntry(s, box, name, null);
+    const stillKept = s.boxes.some((b) => entries[b.id]?.[name]);
+    return { entries, decisions: stillKept ? s.decisions : { ...s.decisions, [name]: 'no' } };
+  });
+}
+
+export function moveToBox(from: string, to: string, name: string) {
+  update((s) => {
+    const e = s.entries[from]?.[name];
+    if (!e || from === to) return {};
+    const entries = withEntry(s, from, name, null);
+    return { entries: { ...entries, [to]: { ...(entries[to] ?? {}), [name]: e } } };
+  });
+}
+
+export function addBox(name: string): string {
+  const id = `b${Date.now().toString(36)}`;
+  update((s) => ({ boxes: [...s.boxes, { id, name }], entries: { ...s.entries, [id]: {} }, activeBox: id }));
+  return id;
+}
+
+export function renameBox(id: string, name: string) {
+  update((s) => ({ boxes: s.boxes.map((b) => (b.id === id ? { ...b, name } : b)) }));
+}
+
+/** Deletes a box. Names that were only in that box go back into the deck. */
+export function deleteBox(id: string) {
+  update((s) => {
+    if (s.boxes.length <= 1) return {};
+    const boxes = s.boxes.filter((b) => b.id !== id);
+    const { [id]: removed = {}, ...entries } = s.entries;
+    const decisions = { ...s.decisions };
+    for (const name of Object.keys(removed)) if (!boxes.some((b) => entries[b.id]?.[name])) delete decisions[name];
+    return { boxes, entries, decisions, activeBox: s.activeBox === id ? boxes[0].id : s.activeBox };
+  });
+}
+
+export function setActiveBox(id: string) {
+  update(() => ({ activeBox: id }));
+}
+
+export function setPartner(partner: Partner | null) {
+  update(() => ({ partner }));
+}
+
+export function dismissNudge(key: string) {
+  update((s) => ({ dismissedNudges: [...s.dismissedNudges, key] }));
 }
 
 export function updateSettings(patch: Partial<Settings>) {
@@ -137,5 +292,14 @@ export function setTutorialDone(done: boolean) {
 }
 
 export function resetAll() {
-  update((s) => ({ decisions: {}, history: [], settings: s.settings }));
+  update((s) => ({
+    decisions: {},
+    history: [],
+    boxes: [{ id: 'b1', name: 'My names' }],
+    activeBox: 'b1',
+    entries: { b1: {} },
+    partner: null,
+    dismissedNudges: [],
+    settings: s.settings,
+  }));
 }

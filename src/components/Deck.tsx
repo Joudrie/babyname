@@ -1,5 +1,6 @@
-import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
-import { GENDER_OF, type Gender } from '../data/names';
+import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
+import { genderOf, prefetchDetails, type Gender } from '../data/catalog';
+import { CardBack } from './NameInfo';
 
 export type Dir = 'left' | 'right' | 'up';
 
@@ -17,6 +18,7 @@ interface Props {
   queue: string[];
   onSwipe(name: string, dir: Dir): void;
   returning: Returning | null;
+  lastName: string;
 }
 
 interface Flying {
@@ -26,6 +28,7 @@ interface Flying {
   dx: number;
   dy: number;
   speed: number;
+  flipped: boolean;
 }
 
 const GENDER_LABEL: Record<Gender, string> = { m: 'boy', f: 'girl', u: 'unisex' };
@@ -50,21 +53,30 @@ function setStamps(el: HTMLElement, like: number, nope: number, maybe: number) {
   el.style.setProperty('--s-maybe', String(maybe));
 }
 
-function CardFace({ name }: { name: string }) {
-  const gender = GENDER_OF[name] ?? 'u';
+const CardFace = memo(function CardFace({ name, lastName, flipped, live }: { name: string; lastName: string; flipped: boolean; live: boolean }) {
+  const gender = genderOf(name);
   const size = name.length > 10 ? 'xl' : name.length > 7 ? 'l' : 'm';
   return (
-    <>
-      <div className="card-tag">{GENDER_LABEL[gender]}</div>
-      <div className={`card-name card-name--${size}`}>{name}</div>
-      <div className="stamp stamp--like">keep</div>
-      <div className="stamp stamp--nope">nope</div>
-      <div className="stamp stamp--maybe">maybe</div>
-    </>
+    <div className={`card-flip ${flipped ? 'is-flipped' : ''}`}>
+      <div className="face face--front">
+        <div className="card-tag">{GENDER_LABEL[gender]}</div>
+        <div className={`card-name card-name--${size}`}>{name}</div>
+        {lastName && (
+          <div className="card-full">
+            {name} {lastName}
+          </div>
+        )}
+        <div className="card-hint">tap for meaning</div>
+        <div className="stamp stamp--like">keep</div>
+        <div className="stamp stamp--nope">nope</div>
+        <div className="stamp stamp--maybe">maybe</div>
+      </div>
+      <div className="face face--back">{(flipped || live) && <CardBack name={name} />}</div>
+    </div>
   );
-}
+});
 
-function FlyingCard({ f, onDone }: { f: Flying; onDone(key: number): void }) {
+function FlyingCard({ f, lastName, onDone }: { f: Flying; lastName: string; onDone(key: number): void }) {
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const el = ref.current!;
@@ -80,20 +92,22 @@ function FlyingCard({ f, onDone }: { f: Flying; onDone(key: number): void }) {
     return () => anim.cancel();
   }, [f, onDone]);
   return (
-    <div ref={ref} className={`card card--${GENDER_OF[f.name] ?? 'u'} card--flying`} aria-hidden="true">
-      <CardFace name={f.name} />
+    <div ref={ref} className={`card card--${genderOf(f.name)} card--flying`} aria-hidden="true">
+      <CardFace name={f.name} lastName={lastName} flipped={f.flipped} live={false} />
     </div>
   );
 }
 
-export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe, returning }, handle) {
+export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe, returning, lastName }, handle) {
   const topRef = useRef<HTMLDivElement | null>(null);
   const nextRef = useRef<HTMLDivElement | null>(null);
   const [flying, setFlying] = useState<Flying[]>([]);
+  const [flipped, setFlipped] = useState<string | null>(null);
   const drag = useRef<{
     id: number;
     x0: number;
     y0: number;
+    t0: number;
     dx: number;
     dy: number;
     samples: { x: number; y: number; t: number }[];
@@ -103,6 +117,12 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
 
   const top = queue[0];
   const visible = queue.slice(0, VISIBLE);
+  const isFlipped = flipped !== null && flipped === top;
+
+  // Warm the meaning/origin data for the next few cards so a flip is instant.
+  useEffect(() => {
+    prefetchDetails(queue.slice(0, 6));
+  }, [queue]);
 
   const removeFlying = useRef((key: number) => setFlying((list) => list.filter((f) => f.key !== key))).current;
 
@@ -135,7 +155,8 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
       setStamps(el, 0, 0, 0);
     }
     releaseNext();
-    setFlying((list) => [...list, { key: ++flyKey.current, name: top, dir, dx, dy, speed }]);
+    setFlying((list) => [...list, { key: ++flyKey.current, name: top, dir, dx, dy, speed, flipped: isFlipped }]);
+    setFlipped(null);
     onSwipe(top, dir);
   }
 
@@ -155,17 +176,27 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
       easing: 'cubic-bezier(.2,.9,.3,1.08)',
     });
     return () => anim.cancel();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [returning?.key]);
+  }, [returning?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || drag.current) return;
+    // Buttons on the back of the card (pronounce) handle their own taps.
+    if ((e.target as HTMLElement).closest('button')) return;
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
     el.getAnimations().forEach((a) => a.cancel());
     el.classList.add('is-dragging');
     nextRef.current?.classList.add('is-dragging');
-    drag.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, dx: 0, dy: 0, samples: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }], raf: 0 };
+    drag.current = {
+      id: e.pointerId,
+      x0: e.clientX,
+      y0: e.clientY,
+      t0: e.timeStamp,
+      dx: 0,
+      dy: 0,
+      samples: [{ x: e.clientX, y: e.clientY, t: e.timeStamp }],
+      raf: 0,
+    };
   }
 
   function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
@@ -186,6 +217,14 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
     const el = e.currentTarget;
     el.classList.remove('is-dragging');
     nextRef.current?.classList.remove('is-dragging');
+
+    // A quick tap that barely moved flips the card to its meaning side.
+    if (e.type === 'pointerup' && Math.hypot(d.dx, d.dy) < 8 && e.timeStamp - d.t0 < 350) {
+      el.style.transform = '';
+      releaseNext();
+      setFlipped(isFlipped ? null : top);
+      return;
+    }
 
     // Release velocity in px/ms over the last ~100ms. The release point counts as a sample,
     // so pausing before letting go reads as a slow release rather than the earlier motion.
@@ -226,7 +265,7 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
       {visible.length === 0 && (
         <div className="card card--empty">
           <div className="card-name card-name--l">All sorted 🎉</div>
-          <p className="card-sub">You've been through every name in your decks. Turn on more in settings.</p>
+          <p className="card-sub">You've been through every name in these decks. Tap 🌍 to open more.</p>
         </div>
       )}
       {visible
@@ -234,19 +273,19 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
           <div
             key={name}
             ref={i === 0 ? topRef : i === 1 ? nextRef : undefined}
-            className={`card card--${GENDER_OF[name] ?? 'u'} depth-${i}`}
+            className={`card card--${genderOf(name)} depth-${i}`}
             onPointerDown={i === 0 ? onPointerDown : undefined}
             onPointerMove={i === 0 ? onPointerMove : undefined}
             onPointerUp={i === 0 ? onPointerUp : undefined}
             onPointerCancel={i === 0 ? onPointerUp : undefined}
             aria-hidden={i !== 0}
           >
-            <CardFace name={name} />
+            <CardFace name={name} lastName={lastName} flipped={i === 0 && isFlipped} live={i === 0} />
           </div>
         ))
         .reverse()}
       {flying.map((f) => (
-        <FlyingCard key={f.key} f={f} onDone={removeFlying} />
+        <FlyingCard key={f.key} f={f} lastName={lastName} onDone={removeFlying} />
       ))}
     </div>
   );

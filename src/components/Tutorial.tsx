@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BoxIcon, ClockIcon, GearIcon, HeartIcon, MaybeIcon, UndoIcon, XIcon } from './icons';
+import { BoxIcon, ClockIcon, GlobeIcon, HeartIcon, MaybeIcon, UndoIcon, XIcon } from './icons';
 import { APP_NAME } from '../config';
 
 export function Tutorial({ onDone }: { onDone(): void }) {
@@ -34,12 +34,12 @@ export function Tutorial({ onDone }: { onDone(): void }) {
                 <span>Swipe <b>up</b> if you're not sure. It'll come back later</span>
               </li>
             </ul>
-            <p className="tutorial-small">Rather tap? The buttons under the card do the same thing.</p>
+            <p className="tutorial-small">Tap a card to flip it and see what the name means. Rather tap than swipe? The buttons under the card work too.</p>
           </>
         ) : (
           <>
             <div className="tutorial-emoji">📦</div>
-            <h2>Keepers go in your box</h2>
+            <h2>Your keepers &amp; your decks</h2>
             <ul className="gesture-list">
               <li>
                 <span className="gesture">
@@ -55,15 +55,18 @@ export function Tutorial({ onDone }: { onDone(): void }) {
               </li>
               <li>
                 <span className="gesture">
-                  <ClockIcon size={18} />
+                  <GlobeIcon size={18} />
                 </span>
-                <span>History shows every name you've swiped</span>
+                <span>
+                  We start you on American &amp; Western European names. Tap the globe anytime for other countries, eras,
+                  fiction, or names starting with a letter
+                </span>
               </li>
               <li>
                 <span className="gesture">
-                  <GearIcon size={18} />
+                  <ClockIcon size={18} />
                 </span>
-                <span>Pick boy, girl or unisex names in settings</span>
+                <span>History shows every name you've swiped</span>
               </li>
             </ul>
             <p className="tutorial-small">Everything saves on this device as you go.</p>

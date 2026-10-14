@@ -1,7 +1,20 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 /** Bottom sheet that slides up over the deck. Stays mounted briefly after closing so it can slide back down. */
-export function Sheet({ open, onClose, title, children }: { open: boolean; onClose(): void; title: ReactNode; children: ReactNode }) {
+export function Sheet({
+  open,
+  onClose,
+  title,
+  children,
+  level = 0,
+}: {
+  open: boolean;
+  onClose(): void;
+  title: ReactNode;
+  children: ReactNode;
+  /** Stacking order when a sheet opens on top of another one. */
+  level?: number;
+}) {
   const [mounted, setMounted] = useState(open);
 
   useEffect(() => {
@@ -22,7 +35,7 @@ export function Sheet({ open, onClose, title, children }: { open: boolean; onClo
 
   if (!mounted) return null;
   return (
-    <div className={`sheet-layer ${open ? 'is-open' : 'is-closing'}`}>
+    <div className={`sheet-layer ${open ? 'is-open' : 'is-closing'}`} style={{ zIndex: 20 + level }}>
       <div className="sheet-backdrop" onClick={onClose} />
       <div className="sheet" role="dialog" aria-modal="true">
         <div className="sheet-head">
