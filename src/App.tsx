@@ -6,25 +6,27 @@ import { readPartnerHash } from './share';
 import { Deck, type DeckHandle, type Dir, type Returning } from './components/Deck';
 import { Sheet } from './components/Sheet';
 import { HistoryPanel, SettingsPanel } from './components/Panels';
+import { PrivacyPage, TermsPage } from './components/Legal';
 import { BoxPage, BoxesPage, ComparePanel, NameActions } from './components/Box';
 import { DeckPicker } from './components/DeckPicker';
 import { ListView } from './components/ListView';
 import { Tutorial } from './components/Tutorial';
 import { BackIcon, BoxIcon, CardsIcon, ClockIcon, GearIcon, GlobeIcon, HeartIcon, ListIcon, MaybeIcon, UndoIcon, XIcon } from './components/icons';
 import { APP_NAME } from './config';
+import { AD_EVERY, AD_TOKEN, AdBanner } from './ads';
 
 const DIR_ACTION: Record<Dir, Action> = { right: 'yes', left: 'no', up: 'maybe' };
 const ACTION_DIR: Record<Action, Dir> = { yes: 'right', no: 'left', maybe: 'up' };
 
-type Panel = 'history' | 'settings' | 'decks' | null;
+type Panel = 'settings' | 'decks' | null;
 /** Full pages (not pop-ups). They live in the URL hash so the phone's back gesture works. */
-type Page = 'home' | 'boxes' | 'box' | 'compare';
+type Page = 'home' | 'boxes' | 'box' | 'compare' | 'history' | 'privacy' | 'terms';
 
 function readRoute(): { page: Page; boxId: string } {
   const h = window.location.hash;
   if (h === '#boxes') return { page: 'boxes', boxId: '' };
   if (h.startsWith('#box/')) return { page: 'box', boxId: decodeURIComponent(h.slice(5)) };
-  if (h === '#compare') return { page: 'compare', boxId: '' };
+  if (h === '#compare' || h === '#history' || h === '#privacy' || h === '#terms') return { page: h.slice(1) as Page, boxId: '' };
   return { page: 'home', boxId: '' };
 }
 
@@ -73,6 +75,10 @@ function Main() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+  // Following a link to a page (privacy, terms) closes whatever sheet it came from.
+  useEffect(() => {
+    if (page !== 'home') setPanel(null);
+  }, [page]);
   const back = useCallback(() => {
     if (readRoute().page !== 'home') history.back();
   }, []);
@@ -112,14 +118,24 @@ function Main() {
     if (incoming) history.replaceState(null, '', window.location.pathname + window.location.search);
   }, [incoming]);
 
+  // Every AD_EVERY real swipes, a sponsored card slips in as the next card.
+  const sinceAd = useRef(0);
   const onSwipe = useCallback((name: string, dir: Dir) => {
+    if (name === AD_TOKEN) {
+      setQueue((q) => q.filter((n) => n !== AD_TOKEN));
+      return;
+    }
+    sinceAd.current++;
+    const showAd = sinceAd.current >= AD_EVERY;
+    if (showAd) sinceAd.current = 0;
     const action = DIR_ACTION[dir];
     decide(name, action);
     if (action === 'yes') setBump((b) => b + 1);
     // "Not sure" names go to the back of the pile instead of disappearing.
     setQueue((q) => {
       const rest = q.filter((n) => n !== name);
-      return action === 'maybe' ? [...rest, name] : rest;
+      const next = action === 'maybe' ? [...rest, name] : rest;
+      return showAd && next.length ? [AD_TOKEN, ...next] : next;
     });
   }, []);
 
@@ -184,7 +200,7 @@ function Main() {
                 {mode === 'swipe' ? <ListIcon size={22} /> : <CardsIcon size={22} />}
                 <span>{mode === 'swipe' ? 'List' : 'Cards'}</span>
               </button>
-              <button className="icon-btn" onClick={() => setPanel('history')}>
+              <button className="icon-btn" onClick={() => (window.location.hash = 'history')}>
                 <ClockIcon size={22} />
                 <span>History</span>
               </button>
@@ -197,7 +213,7 @@ function Main() {
             {mode === 'swipe' ? (
               <Deck ref={deck} queue={queue} onSwipe={onSwipe} returning={returning} lastName={lastName.trim()} />
             ) : (
-              <ListView queue={queue} onDecide={onListDecide} onOpenName={setOpenName} />
+              <ListView queue={queue.filter((n) => n !== AD_TOKEN)} onDecide={onListDecide} onOpenName={setOpenName} />
             )}
           </main>
 
@@ -227,6 +243,7 @@ function Main() {
               )}
             </button>
           </nav>
+          <AdBanner />
         </>
       ) : (
         <div className="page">
@@ -237,7 +254,13 @@ function Main() {
             <h1>
               {page === 'boxes'
                 ? 'Your boxes'
-                : page === 'box'
+                : page === 'history'
+                  ? `History · ${state.history.length}`
+                  : page === 'privacy'
+                    ? 'Privacy policy'
+                    : page === 'terms'
+                      ? 'Terms of use'
+                      : page === 'box'
                   ? (state.boxes.find((b) => b.id === route.boxId)?.name ?? '')
                   : state.partner
                     ? `You & ${state.partner.name || 'your partner'}`
@@ -245,7 +268,13 @@ function Main() {
             </h1>
           </header>
           <div className="page-body">
-            {page === 'boxes' ? (
+            {page === 'history' ? (
+              <HistoryPanel state={state} onOpenName={setOpenName} />
+            ) : page === 'privacy' ? (
+              <PrivacyPage />
+            ) : page === 'terms' ? (
+              <TermsPage />
+            ) : page === 'boxes' ? (
               <BoxesPage state={state} onOpenBox={(id) => (window.location.hash = `box/${encodeURIComponent(id)}`)} onCompare={() => (window.location.hash = 'compare')} />
             ) : page === 'box' ? (
               <BoxPage state={state} boxId={route.boxId} onOpenName={setOpenName} onGone={back} />
@@ -266,9 +295,6 @@ function Main() {
 
       <Sheet open={panel === 'decks'} onClose={close} title="Choose your names">
         <DeckPicker state={state} />
-      </Sheet>
-      <Sheet open={panel === 'history'} onClose={close} title={`History · ${state.history.length}`}>
-        <HistoryPanel state={state} onOpenName={setOpenName} />
       </Sheet>
       <Sheet open={panel === 'settings'} onClose={close} title="Settings">
         <SettingsPanel

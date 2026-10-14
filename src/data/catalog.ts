@@ -220,9 +220,12 @@ export interface Details {
   series: number[];
   /** Other spellings and other-language forms, most popular first. */
   variants: string[];
+  nicknames: string[];
+  /** Longer names this one is a nickname of (Liz -> Elizabeth). */
+  shortFor: string[];
 }
 
-const shards = new Map<string, Promise<Record<string, [string, string, number[], string[]]>>>();
+const shards = new Map<string, Promise<Record<string, [string, string, number[], string[], string[]?, string[]?]>>>();
 
 function shardKey(name: string) {
   const c = name[0]?.toLowerCase() ?? '';
@@ -245,7 +248,7 @@ function loadShard(key: string) {
 
 export async function getDetails(name: string): Promise<Details | null> {
   const row = (await loadShard(shardKey(name)))[name];
-  return row ? { meaning: row[0], pron: row[1], series: row[2], variants: row[3] ?? [] } : null;
+  return row ? { meaning: row[0], pron: row[1], series: row[2], variants: row[3] ?? [], nicknames: row[4] ?? [], shortFor: row[5] ?? [] } : null;
 }
 
 /** Warms the detail shards for names about to be shown, so a card flip has its data ready. */

@@ -1,6 +1,7 @@
 import { forwardRef, memo, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react';
 import { genderOf, prefetchDetails, type Gender } from '../data/catalog';
 import { CardBack } from './NameInfo';
+import { AD_TOKEN, AdCardFace } from '../ads';
 
 export type Dir = 'left' | 'right' | 'up';
 
@@ -100,8 +101,8 @@ function FlyingCard({ f, lastName, onDone }: { f: Flying; lastName: string; onDo
     return () => anim.cancel();
   }, [f, onDone]);
   return (
-    <div ref={ref} className={`card card--${genderOf(f.name)} card--flying`} aria-hidden="true">
-      <CardFace name={f.name} lastName={lastName} flipped={f.flipped} />
+    <div ref={ref} className={`card card--${f.name === AD_TOKEN ? 'ad' : genderOf(f.name)} card--flying`} aria-hidden="true">
+      {f.name === AD_TOKEN ? <AdCardFace /> : <CardFace name={f.name} lastName={lastName} flipped={f.flipped} />}
     </div>
   );
 }
@@ -129,7 +130,7 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
 
   // Warm the meaning/origin data for the next few cards so a flip is instant.
   useEffect(() => {
-    prefetchDetails(queue.slice(0, 6));
+    prefetchDetails(queue.slice(0, 6).filter((n) => n !== AD_TOKEN));
   }, [queue]);
 
   const removeFlying = useRef((key: number) => setFlying((list) => list.filter((f) => f.key !== key))).current;
@@ -188,8 +189,8 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0 || drag.current) return;
-    // Buttons on the back of the card (pronounce) handle their own taps.
-    if ((e.target as HTMLElement).closest('button')) return;
+    // Buttons and links on a card (pronounce, an ad's link) handle their own taps.
+    if ((e.target as HTMLElement).closest('button, a')) return;
     const el = e.currentTarget;
     el.setPointerCapture(e.pointerId);
     el.getAnimations().forEach((a) => a.cancel());
@@ -230,7 +231,7 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
     if (e.type === 'pointerup' && Math.hypot(d.dx, d.dy) < 8 && e.timeStamp - d.t0 < 350) {
       el.style.transform = '';
       releaseNext();
-      setFlipped(isFlipped ? null : top);
+      if (top !== AD_TOKEN) setFlipped(isFlipped ? null : top);
       return;
     }
 
@@ -281,14 +282,14 @@ export const Deck = forwardRef<DeckHandle, Props>(function Deck({ queue, onSwipe
           <div
             key={name}
             ref={i === 0 ? topRef : i === 1 ? nextRef : undefined}
-            className={`card card--${genderOf(name)} depth-${i}`}
+            className={`card card--${name === AD_TOKEN ? 'ad' : genderOf(name)} depth-${i}`}
             onPointerDown={i === 0 ? onPointerDown : undefined}
             onPointerMove={i === 0 ? onPointerMove : undefined}
             onPointerUp={i === 0 ? onPointerUp : undefined}
             onPointerCancel={i === 0 ? onPointerUp : undefined}
             aria-hidden={i !== 0}
           >
-            <CardFace name={name} lastName={lastName} flipped={i === 0 && isFlipped} />
+            {name === AD_TOKEN ? <AdCardFace /> : <CardFace name={name} lastName={lastName} flipped={i === 0 && isFlipped} />}
           </div>
         ))
         .reverse()}

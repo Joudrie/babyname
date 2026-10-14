@@ -37,6 +37,10 @@ export function SettingsPanel({ state, onReplayTutorial }: { state: State; onRep
           <span>Shows each name with it, so you can hear how it flows.</span>
           <input value={lastName} maxLength={40} placeholder="e.g. Taylor" autoComplete="family-name" onChange={(e) => updateSettings({ lastName: e.target.value })} />
         </label>
+        <label className="field">
+          <span>Middle name (optional). Used to check the initials don't spell anything awkward.</span>
+          <input value={state.settings.middleName} maxLength={40} placeholder="e.g. James" onChange={(e) => updateSettings({ middleName: e.target.value })} />
+        </label>
       </section>
 
       <section>
@@ -81,6 +85,10 @@ export function SettingsPanel({ state, onReplayTutorial }: { state: State; onRep
         {state.saveFailed
           ? "Your browser is blocking storage, so swipes aren't being saved. Try a normal (non-private) window."
           : 'Your progress saves on this device automatically. We never send promotional email.'}
+      </p>
+      <p className="legal-links">
+        <a href="#privacy">Privacy policy</a>
+        <a href="#terms">Terms of use</a>
       </p>
       <p className="panel-note small">
         Name data: US Social Security Administration (1880–2024) via the open-source usbabynames project. Meanings and origins are a guide, not gospel.

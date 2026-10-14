@@ -5,6 +5,8 @@ Sources (not committed, they're large):
     MIT-licensed `usbabynames` npm package (sqlite/us-name-data.sqlite, sqlite/us-name-details.sqlite).
   - Name variants (Stephen / Steven / Esteban / Stefano…) are read out of the details' notes.
 
+  - Nicknames from the hand-curated, Apache-2.0 "nicknames" list (github.com/carltonnorthern/nicknames),
+    names.csv placed in the source dir.
   - Optional: other countries' official name statistics in <intl dir> (see load_intl below):
     England & Wales (ONS), Ireland (CSO), France (INSEE), Spain (INE), Norway (SSB).
 
@@ -211,6 +213,9 @@ def main():
 
     extra = []
     variants = variants_from_notes(details, entries, index)
+    nick, nick_of = load_nicknames(os.path.join(SRC, 'names.csv'))
+    display = {e['key']: e['name'] for e in entries}
+    show = lambda k: display.get(k) or k.capitalize()
 
     # Popularity score 0-9 from log births, so the client can sort and label without the raw counts.
     def pop(e):
@@ -235,7 +240,11 @@ def main():
     for e in entries:
         # Decade series as share per 100k births that decade, so eras are comparable.
         s = [round(e['series'][i] * 100000 / max(1, sum(decade_totals[i].values()))) for i in range(len(DECADES))]
-        shards[shard_of(e['name'])][e['name']] = [e['meaning'], e['pron'], s, variants.get(e['key'], [])]
+        nicks = [show(n) for n in nick.get(e['key'], [])]
+        short_for = [show(n) for n in nick_of.get(e['key'], [])]
+        # Nicknames get their own line on the card, so they're not repeated as "other versions".
+        vs = [v for v in variants.get(e['key'], []) if v not in nicks and v not in short_for]
+        shards[shard_of(e['name'])][e['name']] = [e['meaning'], e['pron'], s, vs, nicks, short_for]
     for k, v in shards.items():
         json.dump(v, open(os.path.join(OUT, 'details', f'{k}.json'), 'w'), separators=(',', ':'), ensure_ascii=False)
     print(f'{len(entries)} names, {sum(1 for v in variants.values() if v)} with variants, {len(shards)} detail shards')
@@ -251,10 +260,29 @@ NOT_NAMES = {'The', 'English', 'French', 'German', 'Spanish', 'Italian', 'Greek'
              'Faith', 'Star', 'Sky', 'Many', 'Some', 'Both', 'Often', 'Similar', 'Middle', 'Princess', 'Queen', 'Prince'}
 
 
+def load_nicknames(path):
+    """{formal: [nicknames]} and {nickname: [formal names]} from the curated list."""
+    nick, of = collections.defaultdict(list), collections.defaultdict(list)
+    if not os.path.exists(path):
+        return nick, of
+    import csv
+    with open(path) as fh:
+        for r in csv.DictReader(fh):
+            if r.get('relationship') != 'has_nickname':
+                continue
+            a, b = r['name1'].strip().lower(), r['name2'].strip().lower()
+            if b not in nick[a]:
+                nick[a].append(b)
+            if a not in of[b]:
+                of[b].append(a)
+    return nick, of
+
+
 def variants_from_notes(details, entries, index):
     """Links names whose notes call one a variant/version/form of the other; a name's variants are its
     direct links plus their links (Mikhail -> Michael -> Miguel), most popular first."""
     adj = collections.defaultdict(set)
+    said = collections.defaultdict(set)
     for key in index:
         for d in details.get(key, {}).values():
             for sent in re.split(r'(?<=[.;])\s+', d.get('notes') or ''):
@@ -266,14 +294,22 @@ def variants_from_notes(details, entries, index):
                     if re.match(r"\s+[A-Z][a-z]", sent[m.end():]) or re.search(r"\b(by|author|writer|poet|playwright|novelist)\s+$", sent[:m.start()]):
                         continue
                     if t != key and t in index and tok not in NOT_NAMES:
-                        adj[key].add(t)
-                        adj[t].add(key)
+                        said[key].add(t)
+    # A link counts when both notes mention each other, or the two names look alike (Stephen /
+    # Esteban yes, Stephen / Tyler no). That keeps real versions and drops passing mentions.
+    from difflib import SequenceMatcher
+    alike = lambda a, b: SequenceMatcher(None, fold(a), fold(b)).ratio() >= 0.4
+    for a, bs in said.items():
+        for b in bs:
+            if a in said.get(b, ()) or alike(a, b):
+                adj[a].add(b)
+                adj[b].add(a)
     total = {e['key']: e['total'] for e in entries}
     by_pop = lambda ks: sorted(ks, key=lambda k: -total.get(k, 0))
     out = {}
     for key in index:
         direct = by_pop(adj[key])
-        second = by_pop({k for d in adj[key] for k in adj[d]} - set(direct) - {key})
+        second = by_pop({k for d in adj[key] for k in adj[d] if alike(k, key)} - set(direct) - {key})
         out[key] = [entries[index[k]]['name'] for k in (direct + second)[:24]]
     return out
 

@@ -106,6 +106,77 @@ function useNudge(state: State, box: string, names: string[]) {
 
 type Sort = 'newest' | 'az';
 
+/** A kept name. Tap it for details; swipe it left (or tap the X) to remove it. */
+function KeptRow({ name, tier, onOpen, onRemove }: { name: string; tier: Tier; onOpen(): void; onRemove(): void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x0: number; y0: number; dx: number; locked: 'x' | 'y' | null; id: number } | null>(null);
+  // A sideways drag that springs back shouldn't also count as a tap that opens the name.
+  const moved = useRef(false);
+
+  function setX(x: number, animate: boolean) {
+    const el = ref.current;
+    if (!el) return;
+    el.style.transition = animate ? 'transform .22s cubic-bezier(.2,.8,.2,1)' : 'none';
+    el.style.transform = x ? `translate3d(${x}px,0,0)` : '';
+  }
+
+  return (
+    <li className="kept-row">
+      <div className="kept-behind" aria-hidden="true">
+        Remove
+      </div>
+      <div
+        ref={ref}
+        className="kept-front"
+        onPointerDown={(e) => {
+          if ((e.target as HTMLElement).closest('.kept-remove')) return;
+          drag.current = { x0: e.clientX, y0: e.clientY, dx: 0, locked: null, id: e.pointerId };
+          moved.current = false;
+        }}
+        onPointerMove={(e) => {
+          const d = drag.current;
+          if (!d || d.id !== e.pointerId) return;
+          const dx = e.clientX - d.x0;
+          const dy = e.clientY - d.y0;
+          // Decide once whether this is a sideways swipe or the list scrolling.
+          if (!d.locked && Math.hypot(dx, dy) > 8) {
+            d.locked = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+            moved.current = true;
+            if (d.locked === 'x') (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+          }
+          if (d.locked === 'x') {
+            d.dx = Math.min(0, dx);
+            setX(d.dx, false);
+          }
+        }}
+        onPointerUp={(e) => {
+          const d = drag.current;
+          drag.current = null;
+          if (!d) return;
+          const w = e.currentTarget.offsetWidth;
+          if (d.locked === 'x' && d.dx < -w * 0.35) {
+            setX(-w, true);
+            setTimeout(onRemove, 180);
+          } else setX(0, true);
+        }}
+        onPointerCancel={() => {
+          drag.current = null;
+          setX(0, true);
+        }}
+      >
+        <button className="kept-main" onClick={() => !moved.current && onOpen()}>
+          <span className={`dot dot--${genderOf(name)}`} />
+          <strong>{name}</strong>
+          {tier > 0 && <span className={`rank-tag rank-tag--${tier}`}>{TIER_LABEL[tier]}</span>}
+        </button>
+        <button className="kept-remove" onClick={onRemove} aria-label={`Remove ${name}`}>
+          <XIcon size={16} />
+        </button>
+      </div>
+    </li>
+  );
+}
+
 /** One box: a compact list built for a hundred names, with one-tap remove and undo. */
 export function BoxPage({ state, boxId, onOpenName, onGone }: { state: State; boxId: string; onOpenName(name: string): void; onGone(): void }) {
   const box = state.boxes.find((b) => b.id === boxId);
@@ -202,21 +273,13 @@ export function BoxPage({ state, boxId, onOpenName, onGone }: { state: State; bo
         </div>
       )}
 
+      {names.length > 0 && <p className="panel-note">Tap a name for details. Swipe it left to remove it.</p>}
       {names.length === 0 ? (
         <p className="empty-note">Nothing here yet. Swipe right on a name you love and it lands here.</p>
       ) : (
         <ul className="kept-list">
           {names.map(([name, e]) => (
-            <li key={name} className="kept-row">
-              <button className="kept-main" onClick={() => onOpenName(name)}>
-                <span className={`dot dot--${genderOf(name)}`} />
-                <strong>{name}</strong>
-                {e.tier > 0 && <span className={`rank-tag rank-tag--${e.tier}`}>{TIER_LABEL[e.tier]}</span>}
-              </button>
-              <button className="kept-remove" onClick={() => remove(name, e)} aria-label={`Remove ${name}`}>
-                <XIcon size={16} />
-              </button>
-            </li>
+            <KeptRow key={name} name={name} tier={e.tier} onOpen={() => onOpenName(name)} onRemove={() => remove(name, e)} />
           ))}
         </ul>
       )}

@@ -40,6 +40,8 @@ export interface Settings {
   letters: string;
   order: Order;
   lastName: string;
+  /** Optional, only used for the initials check. */
+  middleName: string;
   myName: string;
 }
 
@@ -88,6 +90,7 @@ const DEFAULTS: State = {
     letters: '',
     order: 'popular',
     lastName: '',
+    middleName: '',
     myName: '',
   },
   tutorialDone: false,

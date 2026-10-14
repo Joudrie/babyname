@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { SpeakerIcon } from './icons';
+import { useStore } from '../store';
+import { checkInitials } from '../initials';
 import { getCatalog, getDetails, getFictionSource, genderOf, originLabels, type Details } from '../data/catalog';
 
 export function useNameInfo(name: string) {
@@ -65,6 +67,40 @@ export function Sparkline({ series }: { series: number[] }) {
 
 const GENDER_WORD = { m: 'Boy', f: 'Girl', u: 'Unisex' } as const;
 
+/** Nicknames are what people ask about most, so they get their own prominent line. */
+function Nicknames({ name, nicknames, shortFor }: { name: string; nicknames: string[]; shortFor: string[] }) {
+  if (nicknames.length) {
+    return (
+      <p className="nicknames">
+        <span>Nicknames</span>
+        {nicknames.slice(0, 8).join(', ')}
+      </p>
+    );
+  }
+  if (shortFor.length && name.length <= 6) {
+    return (
+      <p className="nicknames">
+        <span>Short for</span>
+        {shortFor.slice(0, 4).join(', ')}
+      </p>
+    );
+  }
+  return null;
+}
+
+/** "Initials T.R.S." once a last name is set in settings, with a gentle warning if they spell something. */
+function Initials({ name }: { name: string }) {
+  const { lastName, middleName } = useStore().settings;
+  if (!lastName.trim()) return null;
+  const { initials, flagged } = checkInitials(name, middleName, lastName);
+  return (
+    <p className={`initials ${flagged ? 'is-flagged' : ''}`}>
+      Initials {initials}
+      {flagged && <b> — these spell something kids might tease about</b>}
+    </p>
+  );
+}
+
 /** The back of a swipe card: meaning, origin, how it sounds, and how popular it's been. */
 export function CardBack({ name }: { name: string }) {
   const info = useNameInfo(name);
@@ -78,7 +114,9 @@ export function CardBack({ name }: { name: string }) {
       </div>
       {d?.pron && <div className="back-pron">{d.pron}</div>}
       {d?.meaning && <p className="back-meaning">{d.meaning}</p>}
+      {d && <Nicknames name={name} nicknames={d.nicknames} shortFor={d.shortFor} />}
       {info?.fiction && <p className="back-fiction">From {info.fiction}</p>}
+      <Initials name={name} />
       {origins.length > 0 && (
         <div className="tag-row">
           {origins.slice(0, 4).map((o) => (
@@ -91,7 +129,7 @@ export function CardBack({ name }: { name: string }) {
       {d && <Sparkline series={d.series} />}
       {d && d.variants.length > 0 && (
         <p className="back-variants">
-          <b>Also:</b> {d.variants.slice(0, 7).join(', ')}
+          <b>Other versions:</b> {d.variants.slice(0, 6).join(', ')}
         </p>
       )}
       {info && !d && !info.fiction && <p className="back-meaning">We don't have notes on this one yet.</p>}
@@ -117,7 +155,9 @@ export function NameDetail({ name, onPickVariant }: { name: string; onPickVarian
         {d?.pron ? ` · ${d.pron}` : ''}
       </div>
       {d?.meaning && <p className="detail-meaning">{d.meaning}</p>}
+      {d && <Nicknames name={name} nicknames={d.nicknames} shortFor={d.shortFor} />}
       {info?.fiction && <p className="back-fiction">From {info.fiction}</p>}
+      <Initials name={name} />
       {origins.length > 0 && (
         <div className="tag-row">
           {origins.map((o) => (

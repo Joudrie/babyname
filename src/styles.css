@@ -1541,12 +1541,32 @@ button {
   border-top: 1px solid var(--line);
 }
 .kept-row {
-  display: flex;
-  align-items: center;
+  position: relative;
   height: 46px;
   border-bottom: 1px solid var(--line);
+  overflow: hidden;
   content-visibility: auto;
   contain-intrinsic-size: auto 46px;
+}
+.kept-behind {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 18px;
+  background: var(--nope);
+  color: #fff;
+  font-weight: 800;
+  font-size: 14px;
+}
+.kept-front {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  touch-action: pan-y;
 }
 .kept-main {
   flex: 1;
@@ -1654,4 +1674,117 @@ button {
   display: grid;
   place-items: center;
   color: inherit;
+}
+
+/* ---------- Ads ---------- */
+
+.card--ad {
+  --card-bg: #fdf6e3;
+  --card-ink: #4b4036;
+}
+.ad-face {
+  padding: 32px 28px;
+  text-align: center;
+  gap: 12px;
+}
+.ad-title {
+  font-family: var(--font-name);
+  font-weight: 600;
+  font-size: 40px;
+}
+.ad-body {
+  margin: 0;
+  font-weight: 700;
+  opacity: 0.75;
+  line-height: 1.4;
+}
+.ad-cta {
+  margin-top: 6px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+}
+.ad-banner {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  margin: 0 -16px;
+  padding: 0 16px;
+  border-top: 1px solid rgba(60, 90, 70, 0.12);
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 13px;
+}
+.ad-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--muted);
+}
+.ad-banner-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Card back extras ---------- */
+
+.nicknames {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+.nicknames span {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.55;
+}
+.initials {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.75;
+}
+.initials.is-flagged {
+  opacity: 1;
+  color: #a33a3a;
+}
+
+/* ---------- Legal ---------- */
+
+.legal {
+  line-height: 1.55;
+  font-size: 15px;
+}
+.legal h2 {
+  font-size: 17px;
+  margin: 22px 0 6px;
+}
+.legal p,
+.legal ul {
+  margin: 0 0 10px;
+}
+.legal a,
+.legal-links a {
+  color: var(--keep);
+  font-weight: 700;
+}
+.legal-links {
+  display: flex;
+  gap: 18px;
+  font-size: 14px;
 }
